@@ -1,0 +1,871 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Painel Consórcio Santander — Análise de Crédito</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    background: #f3f4f6; color: #111827; line-height: 1.45; padding: 16px;
+  }
+  .container { max-width: 1500px; margin: 0 auto; }
+  .header {
+    background: linear-gradient(135deg, #1e3a8a 0%, #2563eb 100%);
+    color: white; padding: 24px 28px; border-radius: 12px; margin-bottom: 20px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+  }
+  .header h1 { font-size: 22px; font-weight: 700; margin-bottom: 6px; }
+  .header .meta { font-size: 13px; opacity: 0.9; display: flex; gap: 24px; flex-wrap: wrap; }
+  .header .meta b { font-weight: 600; }
+  .header .source { margin-top: 10px; font-size: 12px; opacity: 0.85; font-style: italic; }
+
+  .layout { display: grid; grid-template-columns: 340px 1fr; gap: 20px; }
+  @media (max-width: 1100px) { .layout { grid-template-columns: 1fr; } }
+
+  .panel {
+    background: white; border-radius: 12px; padding: 20px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05); margin-bottom: 16px;
+  }
+  .panel h2 {
+    font-size: 14px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;
+    color: #6b7280; margin-bottom: 14px; padding-bottom: 8px; border-bottom: 2px solid #e5e7eb;
+  }
+
+  .control { margin-bottom: 14px; }
+  .control label {
+    display: block; font-size: 12px; font-weight: 600; color: #374151; margin-bottom: 4px;
+  }
+  .control .value-display {
+    float: right; font-size: 12px; color: #2563eb; font-weight: 700;
+  }
+  .control input[type="range"] { width: 100%; cursor: pointer; }
+  .control input[type="number"] {
+    width: 100%; padding: 7px 10px; border: 1px solid #d1d5db; border-radius: 6px;
+    font-size: 13px; font-family: inherit;
+  }
+  .control input[type="number"]:focus { outline: 2px solid #2563eb; outline-offset: -1px; border-color: #2563eb; }
+  .control select {
+    width: 100%; padding: 7px 10px; border: 1px solid #d1d5db; border-radius: 6px;
+    font-size: 13px; background: white;
+  }
+  .control .hint { font-size: 11px; color: #9ca3af; margin-top: 3px; font-style: italic; }
+
+  .kpi-grid {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 12px; margin-bottom: 20px;
+  }
+  .kpi {
+    background: white; padding: 14px 16px; border-radius: 10px;
+    border-left: 4px solid #2563eb; box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+  }
+  .kpi.green { border-left-color: #10b981; }
+  .kpi.red { border-left-color: #ef4444; }
+  .kpi.orange { border-left-color: #f59e0b; }
+  .kpi.purple { border-left-color: #7c3aed; }
+  .kpi .label {
+    font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;
+    color: #6b7280; font-weight: 600; margin-bottom: 4px;
+  }
+  .kpi .value { font-size: 19px; font-weight: 700; color: #111827; }
+  .kpi .sub { font-size: 11px; color: #6b7280; margin-top: 2px; }
+
+  .section-title {
+    font-size: 15px; font-weight: 700; color: #1e3a8a;
+    margin: 24px 0 12px 0; padding-bottom: 8px; border-bottom: 3px solid #1e3a8a;
+  }
+
+  .chart-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+  }
+  @media (max-width: 900px) { .chart-grid { grid-template-columns: 1fr; } }
+  .chart-card {
+    background: white; padding: 16px 18px; border-radius: 10px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+  }
+  .chart-card.full { grid-column: 1 / -1; }
+  .chart-card h3 {
+    font-size: 13px; font-weight: 700; color: #374151; margin-bottom: 6px;
+  }
+  .chart-card .sub { font-size: 11px; color: #9ca3af; margin-bottom: 12px; }
+  .chart-wrap { position: relative; height: 240px; }
+  .chart-wrap.tall { height: 280px; }
+
+  .compare-table {
+    width: 100%; border-collapse: collapse; font-size: 13px;
+  }
+  .compare-table th, .compare-table td {
+    padding: 10px 12px; text-align: right; border-bottom: 1px solid #e5e7eb;
+  }
+  .compare-table th:first-child, .compare-table td:first-child { text-align: left; }
+  .compare-table thead th {
+    background: #f9fafb; font-weight: 700; font-size: 12px;
+    text-transform: uppercase; letter-spacing: 0.3px; color: #6b7280;
+  }
+  .compare-table .winner-bg { background: #ecfdf5; }
+  .compare-table .loser-bg { background: #fef2f2; }
+  .compare-table .num { font-variant-numeric: tabular-nums; font-weight: 600; }
+
+  .note {
+    background: #fef3c7; border-left: 4px solid #f59e0b;
+    padding: 12px 16px; border-radius: 6px; font-size: 13px;
+    margin-top: 12px; color: #78350f;
+  }
+  .note b { color: #92400e; }
+
+  .verdict {
+    padding: 16px 20px; border-radius: 10px; font-size: 14px;
+    font-weight: 600; margin-top: 16px;
+  }
+  .verdict.good { background: #d1fae5; color: #065f46; border-left: 4px solid #10b981; }
+  .verdict.bad  { background: #fee2e2; color: #991b1b; border-left: 4px solid #ef4444; }
+  .verdict.warn { background: #fef3c7; color: #92400e; border-left: 4px solid #f59e0b; }
+
+  .footer {
+    text-align: center; padding: 20px; font-size: 11px; color: #9ca3af;
+  }
+
+  .decomp-row {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 8px 0; border-bottom: 1px solid #f3f4f6; font-size: 13px;
+  }
+  .decomp-row:last-child { border-bottom: none; font-weight: 700; }
+  .decomp-row .bar {
+    flex: 1; height: 6px; background: #e5e7eb; border-radius: 3px; margin: 0 12px;
+    position: relative; overflow: hidden;
+  }
+  .decomp-row .bar-fill {
+    height: 100%; background: #2563eb; border-radius: 3px;
+  }
+  .decomp-row .val { font-variant-numeric: tabular-nums; min-width: 110px; text-align: right; }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <div class="header">
+    <h1>Painel de Análise — Consórcio Santander vs Empréstimo Atual</h1>
+    <div class="meta">
+      <span><b>Cliente:</b> Feira Nova</span>
+      <span><b>Modalidade:</b> Imóveis</span>
+      <span><b>Data proposta:</b> 28/05/2026</span>
+      <span><b>Carta consórcio:</b> R$ 58,89M</span>
+      <span><b>Empréstimo atual:</b> CDI+1,80%, 60m, SAC</span>
+    </div>
+    <div class="source">Fluxos extraídos do arquivo "FEIRA NOVA (1).xlsm" (linhas 220/223 da aba IMÓVEL) e do PDF do contrato Santander. Lance próprio financiado por empréstimo ponte CDI+1,80%, com custo proporcional ao tempo até contemplação.</div>
+  </div>
+
+  <div class="layout">
+
+    <!-- Painel de Controles -->
+    <div>
+      <div class="panel">
+        <h2>Premissas — Consórcio</h2>
+
+        <div class="control">
+          <label>INCC projetado a.a. <span class="value-display" id="incc-display">5,54%</span></label>
+          <input type="range" id="incc" min="0" max="15" step="0.05" value="5.54">
+          <div class="hint">Premissa atual do arquivo: 5,54%</div>
+        </div>
+
+        <div class="control">
+          <label>Mês de contemplação <span class="value-display" id="contemp-display">1</span></label>
+          <input type="range" id="contemp" min="1" max="36" step="1" value="1">
+          <div class="hint">Atrasa contemplação → ponte custa mais</div>
+        </div>
+
+        <div class="control">
+          <label>Incluir seguro de vida</label>
+          <select id="seguro">
+            <option value="0" selected>Sem seguro (fluxo do arquivo)</option>
+            <option value="1">Com seguro (+10,8%)</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>Empréstimo Ponte (lance)</h2>
+
+        <div class="control">
+          <label>Spread do ponte sobre CDI a.a. <span class="value-display" id="ponte-spread-display">1,80%</span></label>
+          <input type="range" id="ponte-spread" min="0.5" max="5" step="0.05" value="1.80">
+          <div class="hint">Mesma taxa do empréstimo atual</div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>Empréstimo Atual</h2>
+
+        <div class="control">
+          <label>Valor disponível (principal)</label>
+          <input type="number" id="emp-valor" value="25000000" step="500000" min="1000000" max="100000000">
+          <div class="hint">Edite para simular outros volumes (default R$ 25M)</div>
+        </div>
+
+        <div class="control">
+          <label>CDI atual a.a. <span class="value-display" id="cdi-display">14,90%</span></label>
+          <input type="range" id="cdi" min="5" max="20" step="0.1" value="14.90">
+          <div class="hint">Taxa atual de referência</div>
+        </div>
+
+        <div class="control">
+          <label>CDI projetado em 5 anos <span class="value-display" id="cdi-fut-display">10,00%</span></label>
+          <input type="range" id="cdi-fut" min="5" max="20" step="0.1" value="10.00">
+          <div class="hint">Cenário futuro — declínio linear até esse valor</div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>Dados Fixos</h2>
+        <table style="width:100%; font-size: 11px;">
+          <tr><td colspan="2" style="font-weight:700;color:#1e3a8a;padding-top:6px">CONSÓRCIO</td></tr>
+          <tr><td>Lance próprio</td><td style="text-align:right;font-weight:600">R$ 18.238.628</td></tr>
+          <tr><td>Crédito disponível</td><td style="text-align:right;font-weight:600">R$ 41.913.121</td></tr>
+          <tr><td>Caixa líquido</td><td style="text-align:right;font-weight:600">R$ 23.674.493</td></tr>
+          <tr><td>Saldo devedor pós</td><td style="text-align:right;font-weight:600">R$ 33.145.571</td></tr>
+          <tr><td>Prazo máximo</td><td style="text-align:right;font-weight:600">233 meses</td></tr>
+          <tr><td colspan="2" style="font-weight:700;color:#1e3a8a;padding-top:10px">EMPRÉSTIMO ATUAL</td></tr>
+          <tr><td>Carência</td><td style="text-align:right;font-weight:600">12 meses (só juros)</td></tr>
+          <tr><td>Sistema</td><td style="text-align:right;font-weight:600">SAC, 60 meses</td></tr>
+          <tr><td>Indexador</td><td style="text-align:right;font-weight:600">CDI + 1,80%</td></tr>
+        </table>
+      </div>
+    </div>
+
+    <!-- Resultados -->
+    <div>
+
+      <div class="section-title">Resumo da Operação (Consórcio + Ponte)</div>
+      <div class="kpi-grid">
+        <div class="kpi green">
+          <div class="label">Caixa líquido recebido</div>
+          <div class="value" id="k-caixa">—</div>
+          <div class="sub">Crédito − lance próprio</div>
+        </div>
+        <div class="kpi orange">
+          <div class="label">Custo do ponte</div>
+          <div class="value" id="k-ponte-custo">—</div>
+          <div class="sub">Juros sobre R$ 18,24M até contemp.</div>
+        </div>
+        <div class="kpi">
+          <div class="label">Total parcelas consórcio</div>
+          <div class="value" id="k-parcelas">—</div>
+          <div class="sub">Reajustadas pelo INCC</div>
+        </div>
+        <div class="kpi red">
+          <div class="label">Total desembolsado do bolso</div>
+          <div class="value" id="k-desemb">—</div>
+          <div class="sub">Ponte (juros) + parcelas</div>
+        </div>
+        <div class="kpi orange">
+          <div class="label">Custo financeiro líquido</div>
+          <div class="value" id="k-custo">—</div>
+          <div class="sub">Desembolso − caixa recebido</div>
+        </div>
+        <div class="kpi red">
+          <div class="label">TIR real a.a.</div>
+          <div class="value" id="k-tir">—</div>
+          <div class="sub">Métrica comparável a empréstimos</div>
+        </div>
+      </div>
+
+      <div class="section-title">Empréstimo Atual</div>
+      <div class="kpi-grid">
+        <div class="kpi green">
+          <div class="label">Principal recebido</div>
+          <div class="value" id="k-emp-principal">—</div>
+          <div class="sub">Em caixa desde 22/12/2025</div>
+        </div>
+        <div class="kpi">
+          <div class="label">Total juros (5 anos)</div>
+          <div class="value" id="k-emp-juros">—</div>
+          <div class="sub">Considerando trajetória CDI</div>
+        </div>
+        <div class="kpi red">
+          <div class="label">Total nominal pago</div>
+          <div class="value" id="k-emp-total">—</div>
+          <div class="sub">Principal + juros</div>
+        </div>
+        <div class="kpi red">
+          <div class="label">TIR efetiva a.a.</div>
+          <div class="value" id="k-emp-tir">—</div>
+          <div class="sub">Considerando trajetória CDI</div>
+        </div>
+      </div>
+
+      <!-- Veredito -->
+      <div id="verdict" class="verdict warn"></div>
+
+      <div class="section-title">Comparação Visual</div>
+      <div class="chart-grid">
+        <div class="chart-card full">
+          <h3>Parcela Mensal — Consórcio vs Empréstimo (escala temporal real)</h3>
+          <div class="sub">Linha azul = consórcio (233 meses) • Linha laranja = empréstimo • Barra vermelha = custo do ponte no mês da contemplação</div>
+          <div class="chart-wrap tall"><canvas id="chart-parcela-cmp"></canvas></div>
+        </div>
+
+        <div class="chart-card">
+          <h3>Diferença Mensal (Consórcio − Empréstimo)</h3>
+          <div class="sub">Verde = consórcio paga mais; vermelho = empréstimo paga mais</div>
+          <div class="chart-wrap"><canvas id="chart-diff"></canvas></div>
+        </div>
+
+        <div class="chart-card">
+          <h3>Desembolso Acumulado</h3>
+          <div class="sub">Quanto cada operação já tirou do seu caixa em cada momento</div>
+          <div class="chart-wrap"><canvas id="chart-acumulado"></canvas></div>
+        </div>
+
+        <div class="chart-card">
+          <h3>Composição do Custo Financeiro (Consórcio)</h3>
+          <div class="sub">De onde vem o spread entre o que paga e recebe</div>
+          <div class="chart-wrap"><canvas id="chart-composicao"></canvas></div>
+        </div>
+
+        <div class="chart-card">
+          <h3>Saldo Devedor Real do Consórcio</h3>
+          <div class="sub">Soma das parcelas ainda a pagar a partir de cada mês</div>
+          <div class="chart-wrap"><canvas id="chart-saldo"></canvas></div>
+        </div>
+
+        <div class="chart-card">
+          <h3>Sensibilidade ao INCC</h3>
+          <div class="sub">Como TIR e custo do consórcio mudam com inflação setorial</div>
+          <div class="chart-wrap tall"><canvas id="chart-sens-incc"></canvas></div>
+        </div>
+
+        <div class="chart-card">
+          <h3>Sensibilidade ao CDI Futuro</h3>
+          <div class="sub">Como TIR e custo do empréstimo mudam com cenários de juros</div>
+          <div class="chart-wrap tall"><canvas id="chart-sens-cdi"></canvas></div>
+        </div>
+      </div>
+
+      <div class="panel" style="margin-top: 16px;">
+        <h2>Decomposição do Custo Financeiro — Consórcio</h2>
+        <div id="decomp"></div>
+        <div class="note">
+          <b>Mecânica do lance próprio:</b> os R$ 18,24M de lance NÃO saem do seu bolso. Eles são tomados via empréstimo ponte (CDI + spread), pagos como lance, e quitados quando a carta é liberada. O que efetivamente sai do seu caixa é apenas os juros do ponte (proporcionais ao tempo até a contemplação) e as parcelas mensais do consórcio.
+        </div>
+      </div>
+
+      <div class="panel" style="margin-top: 16px;">
+        <h2>Comparação Detalhada — Valores Absolutos</h2>
+        <table class="compare-table" id="tbl-compare">
+          <thead>
+            <tr><th>Indicador</th><th>Consórcio</th><th>Empréstimo</th><th>Diferença</th></tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+
+      <div class="panel" style="margin-top: 16px;">
+        <h2>Pontos de Atenção</h2>
+        <ul style="font-size: 13px; padding-left: 22px; line-height: 1.7;">
+          <li><b>Custo do ponte é proporcional ao tempo.</b> Se a contemplação atrasar, paga juros do ponte por mais meses. Mês 1 = ~R$ 254K; Mês 6 = ~R$ 1,55M; Mês 12 = ~R$ 3,15M.</li>
+          <li><b>O consórcio aplica INCC (5,54%); o empréstimo aplica CDI (14,90%).</b> Indexadores diferentes. Se CDI cair, empréstimo melhora. Se INCC subir, consórcio piora.</li>
+          <li><b>O empréstimo dura 5 anos; o consórcio dura 19 anos.</b> Avalie se prefere terminar antes (e ficar com a empresa "livre" antes) ou diluir parcelas ao longo do tempo.</li>
+          <li><b>O lance próprio é pass-through.</b> Vem do ponte, vira lance, é compensado pela carta. O que importa para seu caixa real é o juros do ponte + parcelas do consórcio.</li>
+        </ul>
+      </div>
+
+      <div class="footer">
+        Painel gerado em 28/05/2026 · Dados da planilha "FEIRA NOVA (1).xlsm" e PDF do contrato · Recalcula em tempo real
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ============= FLUXO REAL DA PLANILHA "FEIRA NOVA (1)" (linha 220, SEM reajuste) =============
+const FLUXO_SEM_REAJUSTE = [656491.92,374128.33,374128.33,374128.33,374128.33,374128.33,374128.33,374128.33,374128.33,374128.33,374128.33,374128.33,374128.33,374128.33,374128.33,374128.33,374128.33,374128.33,374128.33,374128.33,374128.33,374128.33,374128.33,374128.33,374128.33,374128.33,374128.33,374128.33,374128.33,374128.33,374128.33,374128.33,374128.33,374128.33,374128.33,374128.33,374128.33,374128.33,374128.33,374128.33,374128.33,374128.33,374128.33,374128.33,374128.33,374128.33,374128.33,374128.33,374128.33,374128.33,374128.33,374128.33,374128.33,374128.33,374128.33,374128.33,374128.33,374128.33,374128.33,374128.33,374128.33,374128.33,368918.14,363790.23,354020.49,306740.3,270361.03,226163.42,186110.88,162180.98,134078.51,118777.95,107081.31,107081.31,97485.19,97485.19,97485.19,97485.19,97485.19,89555.21,78360.36,78360.36,78360.36,78360.36,78360.36,78360.36,78360.36,78360.36,76376.29,74388.95,72473.66,72473.66,64832.67,64832.67,64832.67,64832.67,64832.67,64832.67,64832.67,64832.67,64832.67,64832.67,63413.44,63413.44,63413.44,63413.44,63413.44,62126.56,62126.56,62126.56,62126.56,62126.56,62126.56,62126.56,62126.56,62126.56,62126.56,62126.56,62126.56,62126.56,62126.56,62126.56,62126.56,62126.56,62126.56,62126.56,62126.56,62126.56,62126.56,62126.56,62126.56,62126.56,62126.56,62126.56,62126.56,62126.56,62126.56,62126.56,62126.56,62126.56,62126.56,62126.56,62126.56,62126.56,62126.56,62126.56,62126.56,62126.56,62126.56,62126.56,62126.56,62126.56,62126.56,61284.74,59933.24,58541.7,57188.23,55846.47,55061.06,54534.12,53263.86,53263.86,50648.87,50648.87,50160.18,49439.21,49439.21,46048.04,44628.88,41800.55,35930.39,35930.39,35930.39,35930.39,35930.39,35930.39,35930.39,35930.39,35930.39,35930.39,35930.39,34118.68,34118.68,32048.11,30621.13,29392.3,27367.42,27367.42,24616.03,24616.03,24616.03,24616.03,24616.03,23790.37,22920.18,22920.18,22231.73,21801.77,21382.69,20890.0,20223.87,20223.87,19319.66,19319.66,18445.03,17572.55,17572.55,17335.33,15617.19,13746.0,12582.13,12582.13,12582.13,12582.13,12582.13,11746.62,8820.79,8820.79,8820.79,8820.79,8470.33,5611.58,5263.4,4852.3,4236.49,3552.39,3552.39,3231.07,3231.07,3231.07,2471.3,2471.3,1851.49,0.0,0.0,0.0,0.0,0.0,0.0,0.0];
+
+// ============= PREMISSAS FIXAS DO CONSÓRCIO (FEIRA NOVA (1)) =============
+const PROP = {
+  carta_total: 58890540.64,
+  lance_proprio: 18238628.34,
+  lance_embutido: 16977419.93,
+  saldo_devedor_pos: 33145571.27,
+  taxa_adm_pct: 0.1349,
+  fundo_reserva_pct: 0.0371,
+  parcela_inicial_cheia: 656491.92,
+  seguro_adicional_pct: 0.108,
+  prazo_max: 233,
+};
+PROP.credito_disponivel = PROP.carta_total - PROP.lance_embutido;
+PROP.caixa_liquido = PROP.credito_disponivel - PROP.lance_proprio;
+
+const EMPRESTIMO = {
+  amortizacao_pct: 510204.08 / 25000000, // razão amortização / principal (para escalar)
+  carencia: 12,
+  total_parcelas: 60,
+  spread_aa: 0.018,
+};
+
+// ============= HELPERS =============
+const brl = (v) => (v < 0 ? '−R$ ' : 'R$ ') + Math.abs(Math.round(v)).toLocaleString('pt-BR');
+const brlMM = (v) => (v < 0 ? '−R$ ' : 'R$ ') + (Math.abs(v)/1e6).toFixed(2) + ' mi';
+const pct = (v) => (v * 100).toFixed(2).replace('.', ',') + '%';
+
+function formatBRLshort(v) {
+  const abs = Math.abs(v);
+  if (abs >= 1e9) return (v < 0 ? '−' : '') + 'R$ ' + (abs/1e9).toFixed(2) + 'B';
+  if (abs >= 1e6) return (v < 0 ? '−' : '') + 'R$ ' + (abs/1e6).toFixed(2) + 'M';
+  if (abs >= 1e3) return (v < 0 ? '−' : '') + 'R$ ' + (abs/1e3).toFixed(0) + 'K';
+  return brl(v);
+}
+
+// ============= INPUTS =============
+function getInputs() {
+  return {
+    incc: parseFloat(document.getElementById('incc').value) / 100,
+    contemp: parseInt(document.getElementById('contemp').value),
+    seguro: document.getElementById('seguro').value === '1',
+    cdi: parseFloat(document.getElementById('cdi').value) / 100,
+    cdi_fut: parseFloat(document.getElementById('cdi-fut').value) / 100,
+    ponte_spread: parseFloat(document.getElementById('ponte-spread').value) / 100,
+    emp_valor: parseFloat(document.getElementById('emp-valor').value) || 25000000,
+  };
+}
+
+// ============= CONSÓRCIO =============
+function anoReajuste(mes) {
+  if (mes < 12) return 0;
+  return Math.floor((mes - 12) / 12) + 1;
+}
+function aplicarReajuste(fluxoBase, incc) {
+  return fluxoBase.map((p, i) => {
+    const mes = i + 1;
+    const anos = anoReajuste(mes);
+    return p * Math.pow(1 + incc, anos);
+  });
+}
+function aplicarSeguro(fluxo, ativo) {
+  const fator = ativo ? (1 + PROP.seguro_adicional_pct) : 1;
+  return fluxo.map(p => p * fator);
+}
+function aplicarContempAtrasada(fluxo, mesContemp) {
+  if (mesContemp <= 1) return [...fluxo];
+  const novo = [];
+  for (let i = 0; i < mesContemp - 1; i++) novo.push(PROP.parcela_inicial_cheia);
+  for (let i = 0; i < fluxo.length; i++) novo.push(fluxo[i]);
+  return novo;
+}
+
+function calcCustoPonte(mesContemp, cdi, ponteSpread) {
+  const taxa_ponte_aa = cdi + ponteSpread;
+  const taxa_ponte_am = Math.pow(1 + taxa_ponte_aa, 1/12) - 1;
+  const valor_final = PROP.lance_proprio * Math.pow(1 + taxa_ponte_am, mesContemp);
+  return valor_final - PROP.lance_proprio;
+}
+
+function buildFluxoConsorcio(inputs) {
+  let parcelas = aplicarReajuste(FLUXO_SEM_REAJUSTE, inputs.incc);
+  parcelas = aplicarSeguro(parcelas, inputs.seguro);
+  parcelas = aplicarContempAtrasada(parcelas, inputs.contemp);
+
+  const custo_ponte = calcCustoPonte(inputs.contemp, inputs.cdi, inputs.ponte_spread);
+
+  // Fluxo da TIR (do ponto de vista do tomador):
+  // - Mês 0: 0 (toma ponte e dá lance — entradas = saídas)
+  // - Mês contemp: recebe carta − paga ponte (lance + juros) − paga parcela
+  //   = credito_disponivel - lance_proprio - juros_ponte - parcela
+  //   = caixa_liquido - juros_ponte - parcela
+  // - Outros meses: -parcela
+
+  const fluxo = [0];
+  for (let i = 0; i < parcelas.length; i++) {
+    const mes = i + 1;
+    if (mes === inputs.contemp) {
+      fluxo.push(PROP.credito_disponivel - PROP.lance_proprio - custo_ponte - parcelas[i]);
+    } else {
+      fluxo.push(-parcelas[i]);
+    }
+  }
+  return { parcelas, fluxo, custo_ponte };
+}
+
+function calcSaldoDevedorReal(parcelas) {
+  const n = parcelas.length;
+  const saldos = new Array(n + 1).fill(0);
+  for (let t = n - 1; t >= 0; t--) {
+    saldos[t] = saldos[t + 1] + parcelas[t];
+  }
+  return saldos;
+}
+
+// ============= EMPRÉSTIMO =============
+function trajetoriaCDI(cdi0, cdiFinal, mes) {
+  const meses_total = EMPRESTIMO.total_parcelas;
+  if (mes >= meses_total) return cdiFinal;
+  return cdi0 + (cdiFinal - cdi0) * (mes / meses_total);
+}
+
+function buildFluxoEmprestimo(principal, cdi0, cdiFinal, spread) {
+  let saldo = principal;
+  const fluxo = [principal];
+  const parcelas = [0];
+  const juros_arr = [0];
+  const amort_arr = [0];
+  const saldo_evol = [saldo];
+
+  // Amortização constante (SAC): principal dividido pelas parcelas após carência
+  const amort_pos_carencia = principal / (EMPRESTIMO.total_parcelas - EMPRESTIMO.carencia + 1);
+
+  for (let mes = 1; mes <= EMPRESTIMO.total_parcelas; mes++) {
+    const cdi_mes = trajetoriaCDI(cdi0, cdiFinal, mes - 1);
+    const taxa_aa = cdi_mes + spread;
+    const taxa_am = Math.pow(1 + taxa_aa, 1/12) - 1;
+
+    const juros = saldo * taxa_am;
+    const amortizacao = mes <= EMPRESTIMO.carencia ? 0 : amort_pos_carencia;
+    const parcela = juros + amortizacao;
+    saldo = Math.max(0, saldo - amortizacao);
+
+    parcelas.push(parcela);
+    juros_arr.push(juros);
+    amort_arr.push(amortizacao);
+    saldo_evol.push(saldo);
+    fluxo.push(-parcela);
+  }
+
+  return { parcelas, fluxo, juros_arr, amort_arr, saldo_evol,
+           total_pago: parcelas.reduce((a,b)=>a+b, 0),
+           total_juros: juros_arr.reduce((a,b)=>a+b, 0) };
+}
+
+// ============= FINANCIAL HELPERS =============
+function calcNPV(rate, flows) {
+  let npv = 0;
+  for (let t = 0; t < flows.length; t++) npv += flows[t] / Math.pow(1 + rate, t);
+  return npv;
+}
+
+function calcIRR(flows) {
+  let lo = -0.005, hi = 0.30;
+  for (let i = 0; i < 200; i++) {
+    const mid = (lo + hi) / 2;
+    const v_mid = calcNPV(mid, flows);
+    const v_lo = calcNPV(lo, flows);
+    if (Math.abs(v_mid) < 0.01) return mid;
+    if (v_lo * v_mid < 0) hi = mid;
+    else lo = mid;
+  }
+  return (lo + hi) / 2;
+}
+
+// ============= CHARTS =============
+let charts = {};
+function destroyCharts() {
+  Object.values(charts).forEach(c => c.destroy());
+  charts = {};
+}
+Chart.defaults.font.family = '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+Chart.defaults.font.size = 11;
+Chart.defaults.color = '#374151';
+
+function makeCharts(inputs, consorcioData, empData, custoPonte) {
+  destroyCharts();
+  const { parcelas: parc_c } = consorcioData;
+  const { parcelas: parc_e } = empData;
+
+  const N = Math.max(parc_c.length, parc_e.length);
+  const meses = Array.from({length: N+1}, (_, i) => i);
+
+  const parc_c_align = [0, ...parc_c, ...Array(Math.max(0, N - parc_c.length)).fill(0)];
+  const parc_e_align = [...parc_e, ...Array(Math.max(0, N + 1 - parc_e.length)).fill(0)];
+
+  const parc_ponte = new Array(N+1).fill(0);
+  if (inputs.contemp >= 1 && inputs.contemp <= N) {
+    parc_ponte[inputs.contemp] = custoPonte;
+  }
+
+  charts.parcelaCmp = new Chart(document.getElementById('chart-parcela-cmp'), {
+    type: 'line',
+    data: {
+      labels: meses,
+      datasets: [
+        { label: 'Consórcio', data: parc_c_align, borderColor: '#2563eb', backgroundColor: 'rgba(37,99,235,0.08)', fill: true, tension: 0.1, pointRadius: 0, borderWidth: 2 },
+        { label: 'Empréstimo', data: parc_e_align, borderColor: '#f59e0b', backgroundColor: 'rgba(245,158,11,0.08)', fill: true, tension: 0.1, pointRadius: 0, borderWidth: 2 },
+        { label: 'Custo do ponte', data: parc_ponte, backgroundColor: 'rgba(239,68,68,0.6)', borderColor: '#ef4444', borderWidth: 1, type: 'bar' }
+      ]
+    },
+    options: {
+      maintainAspectRatio: false, responsive: true,
+      plugins: { legend: { position: 'top' }, tooltip: { callbacks: { label: ctx => ctx.dataset.label + ': ' + brl(ctx.parsed.y) }}},
+      scales: {
+        x: { title: { display: true, text: 'Mês desde o início' }, ticks: { maxTicksLimit: 20 }},
+        y: { title: { display: true, text: 'R$ por mês' }, ticks: { callback: v => formatBRLshort(v) }}
+      }
+    }
+  });
+
+  const diff = parc_c_align.map((v, i) => v - parc_e_align[i] - parc_ponte[i]);
+  charts.diff = new Chart(document.getElementById('chart-diff'), {
+    type: 'bar',
+    data: {
+      labels: meses,
+      datasets: [{
+        label: 'Diferença (Consórcio − Empréstimo)',
+        data: diff,
+        backgroundColor: diff.map(v => v >= 0 ? 'rgba(16,185,129,0.6)' : 'rgba(239,68,68,0.6)'),
+        borderWidth: 0
+      }]
+    },
+    options: {
+      maintainAspectRatio: false, responsive: true,
+      plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => brl(ctx.parsed.y) }}},
+      scales: {
+        x: { title: { display: true, text: 'Mês' }, ticks: { maxTicksLimit: 15 }},
+        y: { title: { display: true, text: 'R$ (diferença)' }, ticks: { callback: v => formatBRLshort(v) }}
+      }
+    }
+  });
+
+  let acum_c = 0, acum_e = 0;
+  const acum_c_arr = parc_c_align.map((v, i) => (acum_c += (v + parc_ponte[i])));
+  const acum_e_arr = parc_e_align.map(v => (acum_e += v));
+  charts.acumulado = new Chart(document.getElementById('chart-acumulado'), {
+    type: 'line',
+    data: {
+      labels: meses,
+      datasets: [
+        { label: 'Consórcio (acumulado)', data: acum_c_arr, borderColor: '#2563eb', backgroundColor: 'rgba(37,99,235,0.1)', fill: true, tension: 0.1, pointRadius: 0, borderWidth: 2 },
+        { label: 'Empréstimo (acumulado)', data: acum_e_arr, borderColor: '#f59e0b', backgroundColor: 'rgba(245,158,11,0.1)', fill: true, tension: 0.1, pointRadius: 0, borderWidth: 2 }
+      ]
+    },
+    options: {
+      maintainAspectRatio: false, responsive: true,
+      plugins: { legend: { position: 'top' }, tooltip: { callbacks: { label: ctx => ctx.dataset.label + ': ' + brl(ctx.parsed.y) }}},
+      scales: {
+        x: { title: { display: true, text: 'Mês' }, ticks: { maxTicksLimit: 15 }},
+        y: { title: { display: true, text: 'R$ acumulado' }, ticks: { callback: v => formatBRLshort(v) }}
+      }
+    }
+  });
+
+  const total_parcelas = parc_c.reduce((a,b)=>a+b, 0);
+  const taxa_adm_valor = PROP.taxa_adm_pct * PROP.carta_total;
+  const fr_valor = PROP.fundo_reserva_pct * PROP.carta_total;
+  const total_sem_incc = FLUXO_SEM_REAJUSTE.reduce((a,b)=>a+b, 0) * (inputs.seguro ? 1 + PROP.seguro_adicional_pct : 1);
+  const efeito_incc = total_parcelas - total_sem_incc;
+  const seguro_valor = inputs.seguro ? (total_parcelas - total_parcelas / (1 + PROP.seguro_adicional_pct)) : 0;
+
+  charts.composicao = new Chart(document.getElementById('chart-composicao'), {
+    type: 'doughnut',
+    data: {
+      labels: ['Taxa administração', 'Fundo de reserva', 'Efeito INCC', 'Custo do ponte', ...(inputs.seguro ? ['Seguro'] : [])],
+      datasets: [{
+        data: [taxa_adm_valor, fr_valor, efeito_incc, custoPonte, ...(inputs.seguro ? [seguro_valor] : [])],
+        backgroundColor: ['#f59e0b', '#ef4444', '#2563eb', '#ec4899', '#7c3aed'],
+        borderWidth: 2, borderColor: 'white',
+      }]
+    },
+    options: {
+      maintainAspectRatio: false, responsive: true,
+      plugins: {
+        legend: { position: 'bottom' },
+        tooltip: { callbacks: { label: ctx => ctx.label + ': ' + brl(ctx.parsed) }}
+      }
+    }
+  });
+
+  const saldos = calcSaldoDevedorReal(parc_c);
+  charts.saldo = new Chart(document.getElementById('chart-saldo'), {
+    type: 'line',
+    data: {
+      labels: saldos.map((_, i) => i),
+      datasets: [{
+        label: 'Saldo Devedor', data: saldos,
+        borderColor: '#7c3aed', backgroundColor: 'rgba(124,58,237,0.1)',
+        fill: true, tension: 0.1, pointRadius: 0, borderWidth: 2,
+      }]
+    },
+    options: {
+      maintainAspectRatio: false, responsive: true,
+      plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => brl(ctx.parsed.y) }}},
+      scales: {
+        x: { title: { display: true, text: 'Mês' }, ticks: { maxTicksLimit: 15 }},
+        y: { title: { display: true, text: 'R$' }, ticks: { callback: v => formatBRLshort(v) }}
+      }
+    }
+  });
+
+  const inccs = [0.02, 0.03, 0.04, 0.05, 0.06, 0.07, 0.08, 0.09, 0.10, 0.12];
+  const tirs_incc = [], totais_incc = [];
+  for (const incc of inccs) {
+    const inp_alt = {...inputs, incc};
+    const { fluxo: f_alt, parcelas: p_alt, custo_ponte: cp_alt } = buildFluxoConsorcio(inp_alt);
+    const tir_m = calcIRR(f_alt);
+    tirs_incc.push((Math.pow(1 + tir_m, 12) - 1) * 100);
+    totais_incc.push((p_alt.reduce((a,b)=>a+b, 0) + cp_alt) / 1e6);
+  }
+  charts.sensIncc = new Chart(document.getElementById('chart-sens-incc'), {
+    type: 'line',
+    data: {
+      labels: inccs.map(i => (i*100).toFixed(0) + '%'),
+      datasets: [
+        { label: 'TIR consórcio a.a. (%)', data: tirs_incc, borderColor: '#ef4444', fill: false, yAxisID: 'y', tension: 0.2, borderWidth: 2 },
+        { label: 'Total desembolsado (R$ mi)', data: totais_incc, borderColor: '#2563eb', fill: false, yAxisID: 'y1', tension: 0.2, borderWidth: 2 }
+      ]
+    },
+    options: {
+      maintainAspectRatio: false, responsive: true,
+      plugins: { legend: { position: 'top' }},
+      scales: {
+        x: { title: { display: true, text: 'INCC a.a.' }},
+        y: { type: 'linear', position: 'left', title: { display: true, text: 'TIR (%)' }},
+        y1: { type: 'linear', position: 'right', title: { display: true, text: 'Total (R$ mi)' }, grid: { drawOnChartArea: false }}
+      }
+    }
+  });
+
+  const cdis_fut = [0.05, 0.07, 0.09, 0.10, 0.11, 0.12, 0.13, 0.14, 0.15];
+  const tirs_cdi = [], totais_cdi = [];
+  for (const cdi_f of cdis_fut) {
+    const e_alt = buildFluxoEmprestimo(inputs.emp_valor, inputs.cdi, cdi_f, EMPRESTIMO.spread_aa);
+    const tir_m = calcIRR(e_alt.fluxo);
+    tirs_cdi.push((Math.pow(1 + tir_m, 12) - 1) * 100);
+    totais_cdi.push(e_alt.total_pago / 1e6);
+  }
+  charts.sensCdi = new Chart(document.getElementById('chart-sens-cdi'), {
+    type: 'line',
+    data: {
+      labels: cdis_fut.map(i => (i*100).toFixed(0) + '%'),
+      datasets: [
+        { label: 'TIR empréstimo a.a. (%)', data: tirs_cdi, borderColor: '#f59e0b', fill: false, yAxisID: 'y', tension: 0.2, borderWidth: 2 },
+        { label: 'Total pago (R$ mi)', data: totais_cdi, borderColor: '#2563eb', fill: false, yAxisID: 'y1', tension: 0.2, borderWidth: 2 }
+      ]
+    },
+    options: {
+      maintainAspectRatio: false, responsive: true,
+      plugins: { legend: { position: 'top' }},
+      scales: {
+        x: { title: { display: true, text: 'CDI futuro projetado (em 5 anos)' }},
+        y: { type: 'linear', position: 'left', title: { display: true, text: 'TIR (%)' }},
+        y1: { type: 'linear', position: 'right', title: { display: true, text: 'Total (R$ mi)' }, grid: { drawOnChartArea: false }}
+      }
+    }
+  });
+}
+
+// ============= UPDATE PRINCIPAL =============
+function update() {
+  const inputs = getInputs();
+
+  document.getElementById('incc-display').textContent = (inputs.incc*100).toFixed(2).replace('.', ',') + '%';
+  document.getElementById('contemp-display').textContent = inputs.contemp;
+  document.getElementById('cdi-display').textContent = (inputs.cdi*100).toFixed(2).replace('.', ',') + '%';
+  document.getElementById('cdi-fut-display').textContent = (inputs.cdi_fut*100).toFixed(2).replace('.', ',') + '%';
+  document.getElementById('ponte-spread-display').textContent = (inputs.ponte_spread*100).toFixed(2).replace('.', ',') + '%';
+
+  const consorcioData = buildFluxoConsorcio(inputs);
+  const { parcelas, fluxo, custo_ponte } = consorcioData;
+  const total_parcelas = parcelas.reduce((a,b) => a+b, 0);
+
+  // Visão B — caixa real do bolso (pass-through do lance NÃO conta)
+  const desembolso_caixa_real = custo_ponte + total_parcelas;
+  const caixa_real_recebido = PROP.caixa_liquido;
+  const custo_liquido = desembolso_caixa_real - caixa_real_recebido;
+
+  const tir_m = calcIRR(fluxo);
+  const tir_aa = Math.pow(1 + tir_m, 12) - 1;
+
+  const empData = buildFluxoEmprestimo(inputs.emp_valor, inputs.cdi, inputs.cdi_fut, EMPRESTIMO.spread_aa);
+  const tir_m_e = calcIRR(empData.fluxo);
+  const tir_aa_e = Math.pow(1 + tir_m_e, 12) - 1;
+
+  // KPIs Consórcio
+  document.getElementById('k-caixa').textContent = brlMM(PROP.caixa_liquido);
+  document.getElementById('k-ponte-custo').textContent = brl(custo_ponte);
+  document.getElementById('k-parcelas').textContent = brlMM(total_parcelas);
+  document.getElementById('k-desemb').textContent = brlMM(desembolso_caixa_real);
+  document.getElementById('k-custo').textContent = brlMM(custo_liquido);
+  document.getElementById('k-tir').textContent = pct(tir_aa);
+
+  // KPIs Empréstimo
+  document.getElementById('k-emp-principal').textContent = brlMM(inputs.emp_valor);
+  document.getElementById('k-emp-juros').textContent = brlMM(empData.total_juros);
+  document.getElementById('k-emp-total').textContent = brlMM(empData.total_pago);
+  document.getElementById('k-emp-tir').textContent = pct(tir_aa_e);
+
+  // Veredito
+  const verdict_el = document.getElementById('verdict');
+  if (tir_aa < tir_aa_e) {
+    const diff = (tir_aa_e - tir_aa) * 100;
+    verdict_el.className = 'verdict good';
+    verdict_el.innerHTML = `✅ <b>Consórcio é mais barato.</b> TIR ${pct(tir_aa)} (consórcio) < ${pct(tir_aa_e)} (empréstimo). Vantagem: ${diff.toFixed(2).replace('.', ',')} pp a.a.`;
+  } else if (tir_aa > tir_aa_e) {
+    const diff = (tir_aa - tir_aa_e) * 100;
+    verdict_el.className = 'verdict bad';
+    verdict_el.innerHTML = `❌ <b>Empréstimo é mais barato.</b> TIR ${pct(tir_aa)} (consórcio) > ${pct(tir_aa_e)} (empréstimo). Diferença: ${diff.toFixed(2).replace('.', ',')} pp a.a.`;
+  } else {
+    verdict_el.className = 'verdict warn';
+    verdict_el.innerHTML = `⚖️ <b>Empatado em TIR.</b> Decida por: prazo, perfil do indexador (CDI vs INCC) e fluxo de caixa.`;
+  }
+
+  // Decomposição
+  const taxa_adm_valor = PROP.taxa_adm_pct * PROP.carta_total;
+  const fr_valor = PROP.fundo_reserva_pct * PROP.carta_total;
+  const total_sem_incc = FLUXO_SEM_REAJUSTE.reduce((a,b)=>a+b, 0) * (inputs.seguro ? 1 + PROP.seguro_adicional_pct : 1);
+  const efeito_incc = total_parcelas - total_sem_incc;
+  const seguro_valor = inputs.seguro ? (total_parcelas - total_parcelas / (1 + PROP.seguro_adicional_pct)) : 0;
+
+  const decomp_data = [
+    { label: 'Taxa de administração (13,49% sobre carta R$ 58,89M)', valor: taxa_adm_valor, color: '#f59e0b' },
+    { label: 'Fundo de reserva (3,71% sobre carta)', valor: fr_valor, color: '#ef4444' },
+    { label: 'Efeito do reajuste pelo INCC', valor: efeito_incc, color: '#2563eb' },
+    { label: 'Custo do empréstimo ponte (lance)', valor: custo_ponte, color: '#ec4899' },
+    ...(inputs.seguro ? [{ label: 'Seguro de vida embutido', valor: seguro_valor, color: '#7c3aed' }] : []),
+    { label: 'TOTAL', valor: custo_liquido, color: '#111827' }
+  ];
+  const max_val = Math.max(...decomp_data.slice(0,-1).map(d => Math.abs(d.valor)));
+  document.getElementById('decomp').innerHTML = decomp_data.map((d, i) => {
+    const isTotal = i === decomp_data.length - 1;
+    const pct_bar = max_val > 0 ? (Math.abs(d.valor)/max_val)*100 : 0;
+    return `<div class="decomp-row">
+      <span>${d.label}</span>
+      ${isTotal ? '' : `<div class="bar"><div class="bar-fill" style="width:${pct_bar}%; background:${d.color}"></div></div>`}
+      <span class="val">${brl(d.valor)}</span>
+    </div>`;
+  }).join('');
+
+  // Tabela absoluta
+  const tbody = document.querySelector('#tbl-compare tbody');
+  const consorcio_pmt_media = total_parcelas / parcelas.filter(p => p > 0).length;
+  const emp_pmt_media = empData.total_pago / EMPRESTIMO.total_parcelas;
+  const rows = [
+    ['Valor disponível (caixa)', PROP.caixa_liquido, inputs.emp_valor, 'neutral', 'brl'],
+    ['Parcela média mensal',     consorcio_pmt_media, emp_pmt_media, 'lower_better', 'brl'],
+    ['Maior parcela mensal',     Math.max(...parcelas), Math.max(...empData.parcelas), 'lower_better', 'brl'],
+    ['Prazo (meses)',            PROP.prazo_max, EMPRESTIMO.total_parcelas, 'neutral', 'int'],
+    ['TIR a.a.',                 tir_aa, tir_aa_e, 'lower_better', 'pct'],
+    ['Total nominal pago',       desembolso_caixa_real, empData.total_pago, 'lower_better', 'brl'],
+    ['Custo financeiro líquido', custo_liquido, empData.total_juros, 'lower_better', 'brl'],
+  ];
+  tbody.innerHTML = rows.map(([label, c, e, dir, type]) => {
+    const fmt = type === 'pct' ? pct : (type === 'int' ? (v => Math.round(v).toString()) : brl);
+    const diff = c - e;
+    let cls_c = '', cls_e = '';
+    if (dir === 'lower_better') {
+      cls_c = c < e ? 'winner-bg' : 'loser-bg';
+      cls_e = c > e ? 'winner-bg' : 'loser-bg';
+    }
+    const diff_str = (diff > 0 ? '+' : '') + fmt(diff);
+    return `<tr><td>${label}</td><td class="num ${cls_c}">${fmt(c)}</td><td class="num ${cls_e}">${fmt(e)}</td><td class="num">${diff_str}</td></tr>`;
+  }).join('');
+
+  makeCharts(inputs, consorcioData, empData, custo_ponte);
+}
+
+document.querySelectorAll('input, select').forEach(el => {
+  el.addEventListener('input', update);
+  el.addEventListener('change', update);
+});
+
+update();
+</script>
+</body>
+</html>
