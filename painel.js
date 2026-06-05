@@ -310,6 +310,9 @@ function update() {
   const vendPagoAteAgora = Math.min(6, TRANCHE_VENDEDOR.total_parcelas); // jan→jun/2026 ≈ 6 pagas
   const vendSaldo = Math.max(0, TRANCHE_VENDEDOR.total_parcelas - vendPagoAteAgora) * TRANCHE_VENDEDOR.parcela;
   setTxt('k-vend-saldo', brlMM(vendSaldo));
+  setTxt('k-pior-acum', cons.pior_acumulado_mes
+    ? brlMM(cons.pior_acumulado) + ' (' + mesLabel(cons.pior_acumulado_mes) + ')'
+    : brlMM(0));
 
   // Veredito consolidado
   const vc = document.getElementById('verdict-consolidado');
