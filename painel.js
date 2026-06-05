@@ -197,7 +197,9 @@ function makeChartsFinanciamento(inputs, consorcioData, empData, custoPonte) {
     }
   });
 
-  const diff = parc_c_align.map((v, i) => v - parc_e_align[i] - parc_ponte[i]);
+  // Diferença = (consórcio + custo do ponte) − empréstimo. O ponte é custo do
+  // consórcio, portanto soma do lado do consórcio (não é uma saída do empréstimo).
+  const diff = parc_c_align.map((v, i) => v + parc_ponte[i] - parc_e_align[i]);
   charts.diff = new Chart(document.getElementById('chart-diff'), {
     type: 'bar',
     data: {
