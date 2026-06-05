@@ -7,7 +7,7 @@
 // ----------------------------- FORMATAÇÃO -----------------------------------
 const brl = (v) => (v < 0 ? '−R$ ' : 'R$ ') + Math.abs(Math.round(v)).toLocaleString('pt-BR');
 const brlMM = (v) => (v < 0 ? '−R$ ' : 'R$ ') + (Math.abs(v) / 1e6).toFixed(2) + ' mi';
-const pct = (v) => (v * 100).toFixed(2).replace('.', ',') + '%';
+const pct = (v) => (v == null || !isFinite(v)) ? 'n/d' : (v * 100).toFixed(2).replace('.', ',') + '%';
 
 function formatBRLshort(v) {
   const abs = Math.abs(v);
@@ -156,16 +156,39 @@ function calcNPV(rate, flows) {
   for (let t = 0; t < flows.length; t++) npv += flows[t] / Math.pow(1 + rate, t);
   return npv;
 }
+// TIR mensal por varredura + bisseção. Retorna `null` quando não há raiz
+// confiável (fluxo sem troca de sinal, ou nenhuma raiz na faixa varrida),
+// em vez de devolver um número grudado no limite do intervalo — que antes
+// gerava resultados absurdos (ex.: "2.229% a.a.") em fluxos não-convencionais.
 function calcIRR(flows) {
-  let lo = -0.005, hi = 0.30;
-  for (let i = 0; i < 200; i++) {
-    const mid = (lo + hi) / 2;
-    const v_mid = calcNPV(mid, flows);
-    const v_lo = calcNPV(lo, flows);
-    if (Math.abs(v_mid) < 0.01) return mid;
-    if (v_lo * v_mid < 0) hi = mid; else lo = mid;
+  // Sem ao menos uma entrada e uma saída não existe TIR.
+  if (!flows.some(f => f > 0) || !flows.some(f => f < 0)) return null;
+
+  const f = (r) => calcNPV(r, flows);
+  const lo0 = -0.9, hi0 = 1.0, steps = 380;   // -90% a +100% ao mês
+  let prev = lo0, prevV = f(lo0);
+  for (let i = 1; i <= steps; i++) {
+    const cur = lo0 + (hi0 - lo0) * (i / steps);
+    const curV = f(cur);
+    if (prevV === 0) return prev;
+    if (prevV * curV < 0) {
+      // Bisseção dentro do bracket onde o NPV trocou de sinal.
+      let lo = prev, hi = cur;
+      for (let k = 0; k < 200; k++) {
+        const mid = (lo + hi) / 2, vMid = f(mid);
+        if (Math.abs(vMid) < 1e-3) return mid;
+        if (f(lo) * vMid < 0) hi = mid; else lo = mid;
+      }
+      return (lo + hi) / 2;
+    }
+    prev = cur; prevV = curV;
   }
-  return (lo + hi) / 2;
+  return null; // não convergiu numa raiz dentro da faixa
+}
+// TIR anualizada (ou null se não houver TIR confiável).
+function calcTIRanual(flows) {
+  const r = calcIRR(flows);
+  return r == null ? null : Math.pow(1 + r, 12) - 1;
 }
 
 // =========================== CONSOLIDAÇÃO DE CAIXA ==========================
