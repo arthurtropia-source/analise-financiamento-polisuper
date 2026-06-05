@@ -230,6 +230,10 @@ function buildConsolidado(inputs, consorcioData, empData, cenario) {
   const meses = [], entrada = [], saidaParc = [], saidaVend = [],
         liquido = [], acumulado = [];
   let acum = 0, breakeven = null, payback = null;
+  // Pior (mais negativo) caixa acumulado e o mês em que ocorre — é a maior
+  // necessidade de capital ("buraco de caixa") que a operação exige antes de
+  // o ativo começar a se pagar.
+  let pior_acumulado = 0, pior_acumulado_mes = null;
 
   for (let m = 1; m <= horizonte; m++) {
     const ent = serieAtivo[m] || 0;
@@ -245,13 +249,14 @@ function buildConsolidado(inputs, consorcioData, empData, cenario) {
     liquido.push(liq);
     acumulado.push(acum);
 
+    if (acum < pior_acumulado) { pior_acumulado = acum; pior_acumulado_mes = m; }
     if (breakeven === null && liq >= 0 && m >= ATIVO.mes_inicio) breakeven = m;
     if (payback === null && acum >= 0 && m > 1) payback = m;
   }
 
   return {
     horizonte, meses, entrada, saidaParc, saidaVend, liquido, acumulado,
-    breakeven, payback,
+    breakeven, payback, pior_acumulado, pior_acumulado_mes,
     total_entradas: entrada.reduce((a, b) => a + b, 0),
     total_saidas: saidaParc.reduce((a, b) => a + b, 0) + saidaVend.reduce((a, b) => a + b, 0),
     vendedor_total: serieVendedor.reduce((a, b) => a + b, 0),

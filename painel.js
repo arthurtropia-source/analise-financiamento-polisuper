@@ -10,7 +10,7 @@ function getInputs() {
   return {
     // consórcio / empréstimo
     incc: num('incc', 5.54) / 100,
-    contemp: int('contemp', 1),
+    contemp: int('contemp', 6),
     seguro: document.getElementById('seguro').value === '1',
     cdi: num('cdi', 14.9) / 100,
     cdi_fut: num('cdi-fut', 10) / 100,
@@ -18,8 +18,8 @@ function getInputs() {
     emp_valor: num('emp-valor', 25000000),
     // consolidado
     cenario: document.getElementById('cenario').value, // 'banco' | 'consorcio'
-    ativo_caixa: num('ativo-caixa', 800000),
-    ativo_reaj: num('ativo-reaj', 5) / 100,
+    ativo_caixa: num('ativo-caixa', 324000),
+    ativo_reaj: num('ativo-reaj', 4) / 100,
     ativo_inicio: int('ativo-inicio', 1),
     vend_parcela: num('vend-parcela', 500000),
     vend_n: int('vend-n', 50),
@@ -47,7 +47,63 @@ Chart.defaults.font.family = '-apple-system, BlinkMacSystemFont, "Segoe UI", san
 Chart.defaults.font.size = 11;
 Chart.defaults.color = '#374151';
 
-function makeChartsConsolidado(cons) {
+// Plugin que desenha, dentro do corpo do gráfico, um marcador no fundo de cada
+// curva (o "maior buraco de caixa") com um rótulo fixo (valor + mês) — visível
+// sem precisar passar o mouse por cima.
+function troughMarkersPlugin(troughs) {
+  return {
+    id: 'troughMarkers',
+    afterDatasetsDraw(chart) {
+      const { ctx, chartArea } = chart;
+      const pad = 6, boxH = 20, gap = 4;
+      ctx.save();
+      ctx.font = 'bold 12px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+      troughs.forEach((t, row) => {
+        if (t.mesIndex == null) return;
+        const meta = chart.getDatasetMeta(t.datasetIndex);
+        const pt = meta && meta.data[t.mesIndex];
+        if (!pt) return;
+        const x = pt.x, y = pt.y;
+
+        // Ponto destacado no fundo da curva
+        ctx.beginPath();
+        ctx.arc(x, y, 5, 0, Math.PI * 2);
+        ctx.fillStyle = t.color;
+        ctx.fill();
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = '#fff';
+        ctx.stroke();
+
+        // Rótulos empilhados no topo (área positiva livre), com linha-guia até o ponto.
+        const text = t.label;
+        const boxW = ctx.measureText(text).width + pad * 2;
+        let bx = x - boxW / 2;
+        bx = Math.max(chartArea.left + 2, Math.min(bx, chartArea.right - boxW - 2));
+        const by = chartArea.top + 6 + row * (boxH + gap);
+
+        ctx.beginPath();
+        ctx.moveTo(x, by + boxH);
+        ctx.lineTo(x, y - 5);
+        ctx.strokeStyle = t.color;
+        ctx.setLineDash([3, 3]);
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        ctx.fillStyle = t.color;
+        if (ctx.roundRect) { ctx.beginPath(); ctx.roundRect(bx, by, boxW, boxH, 4); ctx.fill(); }
+        else ctx.fillRect(bx, by, boxW, boxH);
+        ctx.fillStyle = '#fff';
+        ctx.textBaseline = 'middle';
+        ctx.textAlign = 'left';
+        ctx.fillText(text, bx + pad, by + boxH / 2);
+      });
+      ctx.restore();
+    }
+  };
+}
+
+function makeChartsConsolidado(cons, consConsorcio, consBanco) {
   const labels = cons.meses.map(m => mesLabel(m));
 
   charts.consolidado = new Chart(document.getElementById('chart-consolidado'), {
@@ -63,7 +119,19 @@ function makeChartsConsolidado(cons) {
     },
     options: {
       maintainAspectRatio: false, responsive: true,
-      plugins: { legend: { position: 'top' }, tooltip: { callbacks: { label: ctx => ctx.dataset.label + ': ' + brl(ctx.parsed.y) }}},
+      plugins: {
+        legend: { position: 'top' },
+        tooltip: { callbacks: { label: ctx => ctx.dataset.label + ': ' + brl(ctx.parsed.y) }},
+        zoom: {
+          zoom: {
+            wheel: { enabled: true },
+            pinch: { enabled: true },
+            mode: 'x',
+          },
+          pan: { enabled: true, mode: 'x' },
+          limits: { x: { minRange: 6 } },   // janela mínima de ~6 meses
+        }
+      },
       scales: {
         x: { stacked: true, title: { display: true, text: 'Mês (calendário)' }, ticks: { maxTicksLimit: 18 }},
         y: { title: { display: true, text: 'R$ por mês' }, ticks: { callback: v => formatBRLshort(v) }}
@@ -71,25 +139,34 @@ function makeChartsConsolidado(cons) {
     }
   });
 
+  // Gráfico comparativo de caixa acumulado: consórcio (azul) vs empréstimo
+  // (laranja), com o fundo de cada curva ("maior buraco de caixa") marcado e
+  // rotulado dentro do corpo do gráfico.
+  const troughLabel = (c) => c.pior_acumulado_mes
+    ? brlMM(c.pior_acumulado) + ' · ' + mesLabel(c.pior_acumulado_mes) : '';
+  const troughs = [
+    consConsorcio.pior_acumulado_mes ? { datasetIndex: 0, mesIndex: consConsorcio.pior_acumulado_mes - 1, color: '#2563eb', label: troughLabel(consConsorcio) } : null,
+    consBanco.pior_acumulado_mes ? { datasetIndex: 1, mesIndex: consBanco.pior_acumulado_mes - 1, color: '#f59e0b', label: troughLabel(consBanco) } : null,
+  ].filter(Boolean);
+
   charts.payback = new Chart(document.getElementById('chart-payback'), {
     type: 'line',
     data: {
       labels,
-      datasets: [{
-        label: 'Caixa acumulado líquido', data: cons.acumulado,
-        borderColor: '#7c3aed', borderWidth: 2, pointRadius: 0, tension: 0.1, fill: true,
-        backgroundColor: 'rgba(124,58,237,0.08)',
-        segment: { borderColor: ctx => ctx.p1.parsed.y >= 0 ? '#10b981' : '#ef4444' },
-      }]
+      datasets: [
+        { label: 'Consórcio (acumulado)', data: consConsorcio.acumulado, borderColor: '#2563eb', backgroundColor: 'rgba(37,99,235,0.08)', borderWidth: 2, pointRadius: 0, tension: 0.1, fill: true },
+        { label: 'Empréstimo (acumulado)', data: consBanco.acumulado, borderColor: '#f59e0b', backgroundColor: 'rgba(245,158,11,0.08)', borderWidth: 2, pointRadius: 0, tension: 0.1, fill: true },
+      ]
     },
     options: {
       maintainAspectRatio: false, responsive: true,
-      plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => brl(ctx.parsed.y) }}},
+      plugins: { legend: { position: 'top' }, tooltip: { callbacks: { label: ctx => ctx.dataset.label + ': ' + brl(ctx.parsed.y) }}},
       scales: {
         x: { title: { display: true, text: 'Mês (calendário)' }, ticks: { maxTicksLimit: 18 }},
         y: { title: { display: true, text: 'R$ acumulado' }, ticks: { callback: v => formatBRLshort(v) }}
       }
-    }
+    },
+    plugins: [troughMarkersPlugin(troughs)]
   });
 }
 
@@ -132,7 +209,9 @@ function makeChartsFinanciamento(inputs, consorcioData, empData, custoPonte) {
     }
   });
 
-  const diff = parc_c_align.map((v, i) => v - parc_e_align[i] - parc_ponte[i]);
+  // Diferença = (consórcio + custo do ponte) − empréstimo. O ponte é custo do
+  // consórcio, portanto soma do lado do consórcio (não é uma saída do empréstimo).
+  const diff = parc_c_align.map((v, i) => v + parc_ponte[i] - parc_e_align[i]);
   charts.diff = new Chart(document.getElementById('chart-diff'), {
     type: 'bar',
     data: {
@@ -297,7 +376,11 @@ function update() {
   const tir_aa_e = calcTIRanual(empData.fluxo);
 
   // ---------------- Consolidado (caixa do ativo vs todas as parcelas) ------
-  const cons = buildConsolidado(inputs, consorcioData, empData, inputs.cenario);
+  // Calcula os dois cenários: o escolhido alimenta KPIs e o gráfico de fluxo;
+  // ambos alimentam o gráfico comparativo de caixa acumulado.
+  const consConsorcio = buildConsolidado(inputs, consorcioData, empData, 'consorcio');
+  const consBanco = buildConsolidado(inputs, consorcioData, empData, 'banco');
+  const cons = inputs.cenario === 'consorcio' ? consConsorcio : consBanco;
 
   // KPIs consolidado
   setTxt('k-ativo-caixa', brl(cons.entrada[0] || 0));
@@ -310,6 +393,19 @@ function update() {
   const vendPagoAteAgora = Math.min(6, TRANCHE_VENDEDOR.total_parcelas); // jan→jun/2026 ≈ 6 pagas
   const vendSaldo = Math.max(0, TRANCHE_VENDEDOR.total_parcelas - vendPagoAteAgora) * TRANCHE_VENDEDOR.parcela;
   setTxt('k-vend-saldo', brlMM(vendSaldo));
+  // Maior buraco de caixa do cenário escolhido, com a diferença frente ao outro
+  // modelo ao lado do número (verde = buraco menor/melhor, vermelho = maior/pior)
+  // e o mês discreto, em cinza, junto da descrição.
+  const piorEl = document.getElementById('k-pior-acum');
+  const outroCons = inputs.cenario === 'consorcio' ? consBanco : consConsorcio;
+  // valores negativos: diff > 0 significa que ESTE cenário tem buraco menor (melhor)
+  const diffBuraco = cons.pior_acumulado - outroCons.pior_acumulado;
+  const diffHtml = (cons.pior_acumulado_mes && outroCons.pior_acumulado_mes)
+    ? ` <span class="diff ${diffBuraco >= 0 ? 'up' : 'down'}">${diffBuraco >= 0 ? '+' : '−'}${brlMM(Math.abs(diffBuraco))}</span>`
+    : '';
+  piorEl.innerHTML = (cons.pior_acumulado_mes ? brlMM(cons.pior_acumulado) : brlMM(0)) + diffHtml;
+  setTxt('k-pior-acum-sub', 'Acumulado negativo até o break-even' +
+    (cons.pior_acumulado_mes ? ' · ' + mesLabel(cons.pior_acumulado_mes) : ''));
 
   // Veredito consolidado
   const vc = document.getElementById('verdict-consolidado');
@@ -403,13 +499,17 @@ function update() {
 
   // Charts
   destroyCharts();
-  makeChartsConsolidado(cons);
+  makeChartsConsolidado(cons, consConsorcio, consBanco);
   makeChartsFinanciamento(inputs, consorcioData, empData, custo_ponte);
 }
 
 document.querySelectorAll('input, select').forEach(el => {
   el.addEventListener('input', update);
   el.addEventListener('change', update);
+});
+
+document.getElementById('btn-reset-zoom').addEventListener('click', () => {
+  if (charts.consolidado && charts.consolidado.resetZoom) charts.consolidado.resetZoom();
 });
 
 update();
