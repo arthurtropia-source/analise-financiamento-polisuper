@@ -196,7 +196,7 @@ function makeChartsFinanciamento(inputs, consorcioData, empData, custoPonte) {
     }
   });
 
-  const saldos = calcSaldoDevedorReal(parc_c);
+  const saldos = calcSaldoDevedorReal(parc_c, inputs.contemp);
   charts.saldo = new Chart(document.getElementById('chart-saldo'), {
     type: 'line',
     data: {
@@ -217,7 +217,8 @@ function makeChartsFinanciamento(inputs, consorcioData, empData, custoPonte) {
   const tirs_incc = [], totais_incc = [];
   for (const incc of inccs) {
     const { fluxo: f_alt, parcelas: p_alt, custo_ponte: cp_alt } = buildFluxoConsorcio({ ...inputs, incc });
-    tirs_incc.push((Math.pow(1 + calcIRR(f_alt), 12) - 1) * 100);
+    const tir_alt = calcTIRanual(f_alt);
+    tirs_incc.push(tir_alt == null ? null : tir_alt * 100);
     totais_incc.push((p_alt.reduce((a, b) => a + b, 0) + cp_alt) / 1e6);
   }
   charts.sensIncc = new Chart(document.getElementById('chart-sens-incc'), {
@@ -243,7 +244,8 @@ function makeChartsFinanciamento(inputs, consorcioData, empData, custoPonte) {
   const tirs_cdi = [], totais_cdi = [];
   for (const cdi_f of cdis_fut) {
     const e_alt = buildFluxoEmprestimo(inputs.emp_valor, inputs.cdi, cdi_f, EMPRESTIMO.spread_aa);
-    tirs_cdi.push((Math.pow(1 + calcIRR(e_alt.fluxo), 12) - 1) * 100);
+    const tir_cdi = calcTIRanual(e_alt.fluxo);
+    tirs_cdi.push(tir_cdi == null ? null : tir_cdi * 100);
     totais_cdi.push(e_alt.total_pago / 1e6);
   }
   charts.sensCdi = new Chart(document.getElementById('chart-sens-cdi'), {
@@ -289,10 +291,10 @@ function update() {
   const desembolso_caixa_real = custo_ponte + total_parcelas;
   const custo_liquido = desembolso_caixa_real - PROP.caixa_liquido;
 
-  const tir_aa = Math.pow(1 + calcIRR(fluxo), 12) - 1;
+  const tir_aa = calcTIRanual(fluxo);
 
   const empData = buildFluxoEmprestimo(inputs.emp_valor, inputs.cdi, inputs.cdi_fut, EMPRESTIMO.spread_aa);
-  const tir_aa_e = Math.pow(1 + calcIRR(empData.fluxo), 12) - 1;
+  const tir_aa_e = calcTIRanual(empData.fluxo);
 
   // ---------------- Consolidado (caixa do ativo vs todas as parcelas) ------
   const cons = buildConsolidado(inputs, consorcioData, empData, inputs.cenario);
@@ -339,7 +341,10 @@ function update() {
 
   // Veredito financiamento
   const verdict_el = document.getElementById('verdict');
-  if (tir_aa < tir_aa_e) {
+  if (tir_aa == null || tir_aa_e == null) {
+    verdict_el.className = 'verdict warn';
+    verdict_el.innerHTML = `⚠️ <b>TIR indisponível para comparação.</b> O fluxo de caixa de ${tir_aa == null ? 'consórcio' : 'empréstimo'} não tem uma taxa interna de retorno confiável (fluxo não-convencional). Compare pelo total desembolsado e pelo payback.`;
+  } else if (tir_aa < tir_aa_e) {
     verdict_el.className = 'verdict good';
     verdict_el.innerHTML = `✅ <b>Consórcio é mais barato.</b> TIR ${pct(tir_aa)} (consórcio) < ${pct(tir_aa_e)} (empréstimo). Vantagem: ${((tir_aa_e - tir_aa) * 100).toFixed(2).replace('.', ',')} pp a.a.`;
   } else if (tir_aa > tir_aa_e) {

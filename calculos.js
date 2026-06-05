@@ -7,7 +7,7 @@
 // ----------------------------- FORMATAÇÃO -----------------------------------
 const brl = (v) => (v < 0 ? '−R$ ' : 'R$ ') + Math.abs(Math.round(v)).toLocaleString('pt-BR');
 const brlMM = (v) => (v < 0 ? '−R$ ' : 'R$ ') + (Math.abs(v) / 1e6).toFixed(2) + ' mi';
-const pct = (v) => (v * 100).toFixed(2).replace('.', ',') + '%';
+const pct = (v) => (v == null || !isFinite(v)) ? 'n/d' : (v * 100).toFixed(2).replace('.', ',') + '%';
 
 function formatBRLshort(v) {
   const abs = Math.abs(v);
@@ -38,13 +38,6 @@ function aplicarSeguro(fluxo, ativo) {
   const fator = ativo ? (1 + PROP.seguro_adicional_pct) : 1;
   return fluxo.map(p => p * fator);
 }
-function aplicarContempAtrasada(fluxo, mesContemp) {
-  if (mesContemp <= 1) return [...fluxo];
-  const novo = [];
-  for (let i = 0; i < mesContemp - 1; i++) novo.push(PROP.parcela_inicial_cheia);
-  for (let i = 0; i < fluxo.length; i++) novo.push(fluxo[i]);
-  return novo;
-}
 function calcCustoPonte(mesContemp, cdi, ponteSpread) {
   const taxa_ponte_aa = cdi + ponteSpread;
   const taxa_ponte_am = Math.pow(1 + taxa_ponte_aa, 1 / 12) - 1;
@@ -52,9 +45,13 @@ function calcCustoPonte(mesContemp, cdi, ponteSpread) {
   return valor_final - PROP.lance_proprio;
 }
 function buildFluxoConsorcio(inputs) {
+  // O consórcio tem PRAZO FIXO: o cronograma de parcelas fica ancorado no
+  // calendário e NÃO se desloca quando a contemplação atrasa. Os valores das
+  // parcelas são os mesmos pré e pós-contemplação. A única diferença de atrasar
+  // a contemplação é o custo do empréstimo-ponte (o lance próprio fica preso
+  // mais tempo); não há parcelas adicionais.
   let parcelas = aplicarReajuste(FLUXO_SEM_REAJUSTE, inputs.incc);
   parcelas = aplicarSeguro(parcelas, inputs.seguro);
-  parcelas = aplicarContempAtrasada(parcelas, inputs.contemp);
 
   const custo_ponte = calcCustoPonte(inputs.contemp, inputs.cdi, inputs.ponte_spread);
   // Custo do ponte distribuído mensalmente do mês 1 até o mês da contemplação,
@@ -76,10 +73,22 @@ function buildFluxoConsorcio(inputs) {
   }
   return { parcelas, fluxo, custo_ponte, custo_ponte_mensal };
 }
-function calcSaldoDevedorReal(parcelas) {
+// Saldo devedor ao longo do tempo. Mecânica do consórcio:
+//  - Pré-contemplação: as parcelas são pagas mas NÃO reduzem o saldo devedor;
+//    ficam acumuladas.
+//  - No ato da contemplação: todas as parcelas pagas até ali são abatidas de
+//    uma vez do saldo devedor.
+//  - A partir da contemplação: cada parcela reduz o saldo normalmente.
+// Resultado: o saldo fica "achatado" no valor cheio até a contemplação e, daí
+// em diante, segue a soma das parcelas restantes.
+function calcSaldoDevedorReal(parcelas, contemp = 1) {
   const n = parcelas.length;
-  const saldos = new Array(n + 1).fill(0);
-  for (let t = n - 1; t >= 0; t--) saldos[t] = saldos[t + 1] + parcelas[t];
+  const back = new Array(n + 1).fill(0);          // back[t] = soma de parcelas[t..n-1]
+  for (let t = n - 1; t >= 0; t--) back[t] = back[t + 1] + parcelas[t];
+  const total = back[0];
+  const c = Math.max(1, contemp);
+  const saldos = new Array(n + 1);
+  for (let i = 0; i <= n; i++) saldos[i] = i < c ? total : back[i];
   return saldos;
 }
 
@@ -147,16 +156,39 @@ function calcNPV(rate, flows) {
   for (let t = 0; t < flows.length; t++) npv += flows[t] / Math.pow(1 + rate, t);
   return npv;
 }
+// TIR mensal por varredura + bisseção. Retorna `null` quando não há raiz
+// confiável (fluxo sem troca de sinal, ou nenhuma raiz na faixa varrida),
+// em vez de devolver um número grudado no limite do intervalo — que antes
+// gerava resultados absurdos (ex.: "2.229% a.a.") em fluxos não-convencionais.
 function calcIRR(flows) {
-  let lo = -0.005, hi = 0.30;
-  for (let i = 0; i < 200; i++) {
-    const mid = (lo + hi) / 2;
-    const v_mid = calcNPV(mid, flows);
-    const v_lo = calcNPV(lo, flows);
-    if (Math.abs(v_mid) < 0.01) return mid;
-    if (v_lo * v_mid < 0) hi = mid; else lo = mid;
+  // Sem ao menos uma entrada e uma saída não existe TIR.
+  if (!flows.some(f => f > 0) || !flows.some(f => f < 0)) return null;
+
+  const f = (r) => calcNPV(r, flows);
+  const lo0 = -0.9, hi0 = 1.0, steps = 380;   // -90% a +100% ao mês
+  let prev = lo0, prevV = f(lo0);
+  for (let i = 1; i <= steps; i++) {
+    const cur = lo0 + (hi0 - lo0) * (i / steps);
+    const curV = f(cur);
+    if (prevV === 0) return prev;
+    if (prevV * curV < 0) {
+      // Bisseção dentro do bracket onde o NPV trocou de sinal.
+      let lo = prev, hi = cur;
+      for (let k = 0; k < 200; k++) {
+        const mid = (lo + hi) / 2, vMid = f(mid);
+        if (Math.abs(vMid) < 1e-3) return mid;
+        if (f(lo) * vMid < 0) hi = mid; else lo = mid;
+      }
+      return (lo + hi) / 2;
+    }
+    prev = cur; prevV = curV;
   }
-  return (lo + hi) / 2;
+  return null; // não convergiu numa raiz dentro da faixa
+}
+// TIR anualizada (ou null se não houver TIR confiável).
+function calcTIRanual(flows) {
+  const r = calcIRR(flows);
+  return r == null ? null : Math.pow(1 + r, 12) - 1;
 }
 
 // =========================== CONSOLIDAÇÃO DE CAIXA ==========================
