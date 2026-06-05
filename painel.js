@@ -10,7 +10,7 @@ function getInputs() {
   return {
     // consórcio / empréstimo
     incc: num('incc', 5.54) / 100,
-    contemp: int('contemp', 1),
+    contemp: int('contemp', 6),
     seguro: document.getElementById('seguro').value === '1',
     cdi: num('cdi', 14.9) / 100,
     cdi_fut: num('cdi-fut', 10) / 100,
@@ -18,8 +18,8 @@ function getInputs() {
     emp_valor: num('emp-valor', 25000000),
     // consolidado
     cenario: document.getElementById('cenario').value, // 'banco' | 'consorcio'
-    ativo_caixa: num('ativo-caixa', 800000),
-    ativo_reaj: num('ativo-reaj', 5) / 100,
+    ativo_caixa: num('ativo-caixa', 324000),
+    ativo_reaj: num('ativo-reaj', 4) / 100,
     ativo_inicio: int('ativo-inicio', 1),
     vend_parcela: num('vend-parcela', 500000),
     vend_n: int('vend-n', 50),
