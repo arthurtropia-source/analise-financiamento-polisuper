@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Painel Feira Nova — Financiamento + Lucratividade das Lojas</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<link rel="stylesheet" href="estilos.css">
+</head>
+<body>
+<div class="container">
+
+  <div class="header">
+    <h1>Painel Feira Nova — Aquisição das 3 Lojas: Financiamento + Lucratividade</h1>
+    <div class="meta">
+      <span><b>Cliente:</b> Feira Nova</span>
+      <span><b>Ativo:</b> 3 pontos de venda (fundo de comércio)</span>
+      <span><b>Aquisição:</b> R$ 50M</span>
+      <span><b>Início operação:</b> jan/2026</span>
+      <span><b>Carta consórcio:</b> R$ 58,89M</span>
+    </div>
+    <div class="source">
+      Compra de R$ 50M dividida em duas tranches: R$ 25M via empréstimo Santander (CDI+1,80%, SAC 60m) e
+      R$ 25M em parcelas fixas de R$ 500K/mês ao ex-proprietário. As lojas geram caixa desde jan/2026.
+      Em análise: substituir o empréstimo pelo consórcio simulado e identificar o break-even e o payback do ativo.
+    </div>
+  </div>
+
+  <div class="layout">
+
+    <!-- Painel de Controles -->
+    <div>
+      <div class="panel">
+        <h2>Cenário Consolidado</h2>
+        <div class="control">
+          <label>Estrutura de financiamento da tranche bancária</label>
+          <select id="cenario">
+            <option value="banco" selected>Empréstimo atual (R$ 25M)</option>
+            <option value="consorcio">Consórcio Santander (substitui o empréstimo)</option>
+          </select>
+          <div class="hint">As parcelas ao ex-proprietário continuam nos dois casos</div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>Ativo — 3 Lojas</h2>
+        <div class="control">
+          <label>Caixa livre mensal (total) <span class="value-display" id="ativo-caixa-display">R$ 800K</span></label>
+          <input type="number" id="ativo-caixa" value="800000" step="50000" min="0" max="10000000">
+          <div class="hint">PLACEHOLDER — calibrar com o lucro real das 3 lojas</div>
+        </div>
+        <div class="control">
+          <label>Crescimento anual do caixa livre <span class="value-display" id="ativo-reaj-display">5,00%</span></label>
+          <input type="range" id="ativo-reaj" min="0" max="20" step="0.5" value="5">
+        </div>
+        <div class="control">
+          <label>Mês de início (1 = jan/2026)</label>
+          <input type="number" id="ativo-inicio" value="1" step="1" min="1" max="36">
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>Parcelas ao Ex-proprietário</h2>
+        <div class="control">
+          <label>Valor da parcela mensal</label>
+          <input type="number" id="vend-parcela" value="500000" step="50000" min="0" max="5000000">
+          <div class="hint">Fixa, sem indexador</div>
+        </div>
+        <div class="control">
+          <label>Número de parcelas</label>
+          <input type="number" id="vend-n" value="50" step="1" min="1" max="120">
+        </div>
+        <div class="control">
+          <label>Mês de início (1 = jan/2026)</label>
+          <input type="number" id="vend-inicio" value="1" step="1" min="1" max="36">
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>Premissas — Consórcio</h2>
+        <div class="control">
+          <label>INCC projetado a.a. <span class="value-display" id="incc-display">5,54%</span></label>
+          <input type="range" id="incc" min="0" max="15" step="0.05" value="5.54">
+          <div class="hint">Premissa atual do arquivo: 5,54%</div>
+        </div>
+        <div class="control">
+          <label>Mês de contemplação <span class="value-display" id="contemp-display">1</span></label>
+          <input type="range" id="contemp" min="1" max="36" step="1" value="1">
+          <div class="hint">Atrasa contemplação → ponte custa mais</div>
+        </div>
+        <div class="control">
+          <label>Incluir seguro de vida</label>
+          <select id="seguro">
+            <option value="0" selected>Sem seguro (fluxo do arquivo)</option>
+            <option value="1">Com seguro (+10,8%)</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>Empréstimo Ponte (lance)</h2>
+        <div class="control">
+          <label>Spread do ponte sobre CDI a.a. <span class="value-display" id="ponte-spread-display">1,80%</span></label>
+          <input type="range" id="ponte-spread" min="0.5" max="5" step="0.05" value="1.80">
+          <div class="hint">Mesma taxa do empréstimo atual</div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>Empréstimo Atual (tranche banco)</h2>
+        <div class="control">
+          <label>Valor disponível (principal)</label>
+          <input type="number" id="emp-valor" value="25000000" step="500000" min="1000000" max="100000000">
+          <div class="hint">Default R$ 25M</div>
+        </div>
+        <div class="control">
+          <label>CDI atual a.a. <span class="value-display" id="cdi-display">14,90%</span></label>
+          <input type="range" id="cdi" min="5" max="20" step="0.1" value="14.90">
+        </div>
+        <div class="control">
+          <label>CDI projetado em 5 anos <span class="value-display" id="cdi-fut-display">10,00%</span></label>
+          <input type="range" id="cdi-fut" min="5" max="20" step="0.1" value="10.00">
+          <div class="hint">Cenário futuro — declínio linear até esse valor</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Resultados -->
+    <div>
+
+      <!-- ====================== VISÃO CONSOLIDADA ====================== -->
+      <div class="section-title">Visão Consolidada — O ativo se paga?</div>
+      <div class="kpi-grid">
+        <div class="kpi green">
+          <div class="label">Geração de caixa mensal (lojas)</div>
+          <div class="value" id="k-ativo-caixa">—</div>
+          <div class="sub">Caixa livre no mês corrente</div>
+        </div>
+        <div class="kpi red">
+          <div class="label">Saídas mensais (mês 1)</div>
+          <div class="value" id="k-saida-mes1">—</div>
+          <div class="sub">Parcela financiamento + vendedor</div>
+        </div>
+        <div class="kpi" id="kpi-liq-mes1">
+          <div class="label">Fluxo líquido mensal (mês 1)</div>
+          <div class="value" id="k-liq-mes1">—</div>
+          <div class="sub">Entrada − saídas no início</div>
+        </div>
+        <div class="kpi purple">
+          <div class="label">Break-even mensal</div>
+          <div class="value" id="k-breakeven">—</div>
+          <div class="sub">1º mês com fluxo líquido ≥ 0</div>
+        </div>
+        <div class="kpi purple">
+          <div class="label">Payback acumulado</div>
+          <div class="value" id="k-payback">—</div>
+          <div class="sub">Mês em que o ativo se paga</div>
+        </div>
+        <div class="kpi orange">
+          <div class="label">Saldo a pagar ao vendedor</div>
+          <div class="value" id="k-vend-saldo">—</div>
+          <div class="sub">Parcelas fixas restantes</div>
+        </div>
+      </div>
+
+      <div id="verdict-consolidado" class="verdict warn"></div>
+
+      <div class="chart-grid">
+        <div class="chart-card full">
+          <h3>Fluxo de Caixa Mensal Consolidado</h3>
+          <div class="sub">Verde = caixa das lojas • Vermelho/laranja = saídas (financiamento + vendedor) • Linha = fluxo líquido</div>
+          <div class="chart-wrap tall"><canvas id="chart-consolidado"></canvas></div>
+        </div>
+        <div class="chart-card full">
+          <h3>Caixa Acumulado — Ponto de Payback</h3>
+          <div class="sub">Quando a curva cruza o zero, a geração de caixa quitou o desembolso acumulado</div>
+          <div class="chart-wrap tall"><canvas id="chart-payback"></canvas></div>
+        </div>
+      </div>
+
+      <!-- ====================== COMPARAÇÃO FINANCIAMENTO ====================== -->
+      <div class="section-title">Resumo da Operação (Consórcio + Ponte)</div>
+      <div class="kpi-grid">
+        <div class="kpi green">
+          <div class="label">Caixa líquido recebido</div>
+          <div class="value" id="k-caixa">—</div>
+          <div class="sub">Crédito − lance próprio</div>
+        </div>
+        <div class="kpi orange">
+          <div class="label">Custo do ponte</div>
+          <div class="value" id="k-ponte-custo">—</div>
+          <div class="sub">Juros sobre R$ 18,24M até contemp.</div>
+        </div>
+        <div class="kpi">
+          <div class="label">Total parcelas consórcio</div>
+          <div class="value" id="k-parcelas">—</div>
+          <div class="sub">Reajustadas pelo INCC</div>
+        </div>
+        <div class="kpi red">
+          <div class="label">Total desembolsado do bolso</div>
+          <div class="value" id="k-desemb">—</div>
+          <div class="sub">Ponte (juros) + parcelas</div>
+        </div>
+        <div class="kpi orange">
+          <div class="label">Custo financeiro líquido</div>
+          <div class="value" id="k-custo">—</div>
+          <div class="sub">Desembolso − caixa recebido</div>
+        </div>
+        <div class="kpi red">
+          <div class="label">TIR real a.a.</div>
+          <div class="value" id="k-tir">—</div>
+          <div class="sub">Métrica comparável a empréstimos</div>
+        </div>
+      </div>
+
+      <div class="section-title">Empréstimo Atual</div>
+      <div class="kpi-grid">
+        <div class="kpi green">
+          <div class="label">Principal recebido</div>
+          <div class="value" id="k-emp-principal">—</div>
+          <div class="sub">Tranche bancária</div>
+        </div>
+        <div class="kpi">
+          <div class="label">Total juros (5 anos)</div>
+          <div class="value" id="k-emp-juros">—</div>
+          <div class="sub">Considerando trajetória CDI</div>
+        </div>
+        <div class="kpi red">
+          <div class="label">Total nominal pago</div>
+          <div class="value" id="k-emp-total">—</div>
+          <div class="sub">Principal + juros</div>
+        </div>
+        <div class="kpi red">
+          <div class="label">TIR efetiva a.a.</div>
+          <div class="value" id="k-emp-tir">—</div>
+          <div class="sub">Considerando trajetória CDI</div>
+        </div>
+      </div>
+
+      <div id="verdict" class="verdict warn"></div>
+
+      <div class="section-title">Comparação Visual</div>
+      <div class="chart-grid">
+        <div class="chart-card full">
+          <h3>Parcela Mensal — Consórcio vs Empréstimo (escala temporal real)</h3>
+          <div class="sub">Linha azul = consórcio (233 meses) • Linha laranja = empréstimo • Barra vermelha = custo do ponte</div>
+          <div class="chart-wrap tall"><canvas id="chart-parcela-cmp"></canvas></div>
+        </div>
+        <div class="chart-card">
+          <h3>Diferença Mensal (Consórcio − Empréstimo)</h3>
+          <div class="sub">Verde = consórcio paga mais; vermelho = empréstimo paga mais</div>
+          <div class="chart-wrap"><canvas id="chart-diff"></canvas></div>
+        </div>
+        <div class="chart-card">
+          <h3>Desembolso Acumulado</h3>
+          <div class="sub">Quanto cada operação já tirou do seu caixa em cada momento</div>
+          <div class="chart-wrap"><canvas id="chart-acumulado"></canvas></div>
+        </div>
+        <div class="chart-card">
+          <h3>Composição do Custo Financeiro (Consórcio)</h3>
+          <div class="sub">De onde vem o spread entre o que paga e recebe</div>
+          <div class="chart-wrap"><canvas id="chart-composicao"></canvas></div>
+        </div>
+        <div class="chart-card">
+          <h3>Saldo Devedor Real do Consórcio</h3>
+          <div class="sub">Soma das parcelas ainda a pagar a partir de cada mês</div>
+          <div class="chart-wrap"><canvas id="chart-saldo"></canvas></div>
+        </div>
+        <div class="chart-card">
+          <h3>Sensibilidade ao INCC</h3>
+          <div class="sub">Como TIR e custo do consórcio mudam com inflação setorial</div>
+          <div class="chart-wrap tall"><canvas id="chart-sens-incc"></canvas></div>
+        </div>
+        <div class="chart-card">
+          <h3>Sensibilidade ao CDI Futuro</h3>
+          <div class="sub">Como TIR e custo do empréstimo mudam com cenários de juros</div>
+          <div class="chart-wrap tall"><canvas id="chart-sens-cdi"></canvas></div>
+        </div>
+      </div>
+
+      <div class="panel" style="margin-top: 16px;">
+        <h2>Decomposição do Custo Financeiro — Consórcio</h2>
+        <div id="decomp"></div>
+        <div class="note">
+          <b>Mecânica do lance próprio:</b> os R$ 18,24M de lance NÃO saem do seu bolso. Eles são tomados via empréstimo ponte (CDI + spread), pagos como lance, e quitados quando a carta é liberada. O que efetivamente sai do seu caixa é apenas os juros do ponte (proporcionais ao tempo até a contemplação) e as parcelas mensais do consórcio.
+        </div>
+      </div>
+
+      <div class="panel" style="margin-top: 16px;">
+        <h2>Comparação Detalhada — Valores Absolutos</h2>
+        <table class="compare-table" id="tbl-compare">
+          <thead>
+            <tr><th>Indicador</th><th>Consórcio</th><th>Empréstimo</th><th>Diferença</th></tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+
+      <div class="panel" style="margin-top: 16px;">
+        <h2>Pontos de Atenção</h2>
+        <ul style="font-size: 13px; padding-left: 22px; line-height: 1.7;">
+          <li><b>O caixa das lojas é uma premissa editável.</b> Ainda não consta na planilha original — ajuste o valor mensal e o crescimento até refletir o resultado real das 3 lojas.</li>
+          <li><b>As parcelas ao ex-proprietário (R$ 500K/mês) correm nos dois cenários.</b> Elas independem da escolha entre empréstimo e consórcio.</li>
+          <li><b>Custo do ponte é proporcional ao tempo.</b> Se a contemplação atrasar, paga juros do ponte por mais meses.</li>
+          <li><b>O consórcio aplica INCC; o empréstimo aplica CDI.</b> Indexadores diferentes — sensibilidades distintas.</li>
+        </ul>
+      </div>
+
+      <div class="footer">
+        Dados da planilha "FEIRA NOVA (1).xlsm" e PDF do contrato · Caixa das lojas e parcelas do vendedor como premissas editáveis · Recalcula em tempo real
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="dados.js"></script>
+<script src="calculos.js"></script>
+<script src="painel.js"></script>
+</body>
+</html>
