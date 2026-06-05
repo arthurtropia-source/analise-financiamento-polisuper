@@ -78,9 +78,10 @@ function troughMarkersPlugin(troughs) {
         const pad = 6, boxH = 20;
         const boxW = ctx.measureText(text).width + pad * 2;
         let bx = x - boxW / 2;
-        let by = y + 10; // abaixo do fundo da curva
+        // Uma etiqueta acima do ponto, outra abaixo, para não se sobreporem.
+        let by = t.placement === 'above' ? y - boxH - 10 : y + 10;
         bx = Math.max(chartArea.left + 2, Math.min(bx, chartArea.right - boxW - 2));
-        by = Math.min(by, chartArea.bottom - boxH - 2);
+        by = Math.max(chartArea.top + 2, Math.min(by, chartArea.bottom - boxH - 2));
 
         ctx.fillStyle = t.color;
         if (ctx.roundRect) { ctx.beginPath(); ctx.roundRect(bx, by, boxW, boxH, 4); ctx.fill(); }
@@ -125,8 +126,8 @@ function makeChartsConsolidado(cons, consConsorcio, consBanco) {
   const troughLabel = (c) => c.pior_acumulado_mes
     ? brlMM(c.pior_acumulado) + ' · ' + mesLabel(c.pior_acumulado_mes) : '';
   const troughs = [
-    consConsorcio.pior_acumulado_mes ? { datasetIndex: 0, mesIndex: consConsorcio.pior_acumulado_mes - 1, value: consConsorcio.pior_acumulado, color: '#2563eb', label: troughLabel(consConsorcio) } : null,
-    consBanco.pior_acumulado_mes ? { datasetIndex: 1, mesIndex: consBanco.pior_acumulado_mes - 1, value: consBanco.pior_acumulado, color: '#f59e0b', label: troughLabel(consBanco) } : null,
+    consConsorcio.pior_acumulado_mes ? { datasetIndex: 0, mesIndex: consConsorcio.pior_acumulado_mes - 1, color: '#2563eb', label: troughLabel(consConsorcio), placement: 'above' } : null,
+    consBanco.pior_acumulado_mes ? { datasetIndex: 1, mesIndex: consBanco.pior_acumulado_mes - 1, color: '#f59e0b', label: troughLabel(consBanco), placement: 'below' } : null,
   ].filter(Boolean);
 
   charts.payback = new Chart(document.getElementById('chart-payback'), {
@@ -134,17 +135,16 @@ function makeChartsConsolidado(cons, consConsorcio, consBanco) {
     data: {
       labels,
       datasets: [
-        { label: 'Consórcio (acumulado)', data: consConsorcio.acumulado, borderColor: '#2563eb', backgroundColor: 'rgba(37,99,235,0.06)', borderWidth: 2, pointRadius: 0, tension: 0.1, fill: true },
-        { label: 'Empréstimo (acumulado)', data: consBanco.acumulado, borderColor: '#f59e0b', backgroundColor: 'rgba(245,158,11,0.06)', borderWidth: 2, pointRadius: 0, tension: 0.1, fill: true },
+        { label: 'Consórcio (acumulado)', data: consConsorcio.acumulado, borderColor: '#2563eb', backgroundColor: 'rgba(37,99,235,0.08)', borderWidth: 2, pointRadius: 0, tension: 0.1, fill: true },
+        { label: 'Empréstimo (acumulado)', data: consBanco.acumulado, borderColor: '#f59e0b', backgroundColor: 'rgba(245,158,11,0.08)', borderWidth: 2, pointRadius: 0, tension: 0.1, fill: true },
       ]
     },
     options: {
       maintainAspectRatio: false, responsive: true,
-      layout: { padding: { bottom: 24 } },
       plugins: { legend: { position: 'top' }, tooltip: { callbacks: { label: ctx => ctx.dataset.label + ': ' + brl(ctx.parsed.y) }}},
       scales: {
         x: { title: { display: true, text: 'Mês (calendário)' }, ticks: { maxTicksLimit: 18 }},
-        y: { title: { display: true, text: 'R$ acumulado' }, ticks: { callback: v => formatBRLshort(v) }, grid: { color: ctx => ctx.tick.value === 0 ? '#9ca3af' : 'rgba(0,0,0,0.05)' }}
+        y: { title: { display: true, text: 'R$ acumulado' }, ticks: { callback: v => formatBRLshort(v) }}
       }
     },
     plugins: [troughMarkersPlugin(troughs)]
