@@ -185,7 +185,14 @@ function buildConsolidado(inputs, consorcioData, empData, cenario) {
     pontePorMes = new Array(saidaFin.length).fill(0);
   }
 
-  const horizonte = Math.max(saidaFin.length - 1, serieVendedor.length - 1);
+  // Horizonte comum aos dois cenários: estende a simulação até a última parcela
+  // do consórcio (estrutura mais longa), mesmo quando o cenário escolhido é o
+  // empréstimo. Assim é possível avaliar payback/break-even dentro da mesma janela.
+  const lenConsorcio = consorcioData.parcelas.length;      // meses 1..n
+  const lenEmprestimo = empData.parcelas.length - 1;       // empData começa em [0, ...]
+  const horizonte = Math.max(
+    lenConsorcio, lenEmprestimo, serieVendedor.length - 1
+  );
   const serieAtivo = buildSerieAtivo(ATIVO, horizonte);
 
   const meses = [], entrada = [], saidaParc = [], saidaVend = [],
