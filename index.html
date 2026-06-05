@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Painel Feira Nova — Financiamento + Lucratividade das Lojas</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/hammer.js/2.0.8/hammer.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-zoom/2.0.1/chartjs-plugin-zoom.min.js"></script>
 <link rel="stylesheet" href="estilos.css">
 </head>
 <body>
@@ -172,8 +174,8 @@
 
       <div class="chart-grid">
         <div class="chart-card full">
-          <h3>Fluxo de Caixa Mensal Consolidado</h3>
-          <div class="sub">Verde = caixa das lojas • Vermelho/laranja = saídas (financiamento + vendedor) • Linha = fluxo líquido</div>
+          <h3>Fluxo de Caixa Mensal Consolidado <button id="btn-reset-zoom" type="button" class="btn-zoom">Resetar zoom</button></h3>
+          <div class="sub">Verde = caixa das lojas • Vermelho/laranja = saídas (financiamento + vendedor) • Linha = fluxo líquido • <b>Zoom:</b> scroll do mouse ou pinça; arraste para mover (pan)</div>
           <div class="chart-wrap tall"><canvas id="chart-consolidado"></canvas></div>
         </div>
         <div class="chart-card full">

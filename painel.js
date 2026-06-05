@@ -119,7 +119,19 @@ function makeChartsConsolidado(cons, consConsorcio, consBanco) {
     },
     options: {
       maintainAspectRatio: false, responsive: true,
-      plugins: { legend: { position: 'top' }, tooltip: { callbacks: { label: ctx => ctx.dataset.label + ': ' + brl(ctx.parsed.y) }}},
+      plugins: {
+        legend: { position: 'top' },
+        tooltip: { callbacks: { label: ctx => ctx.dataset.label + ': ' + brl(ctx.parsed.y) }},
+        zoom: {
+          zoom: {
+            wheel: { enabled: true },
+            pinch: { enabled: true },
+            mode: 'x',
+          },
+          pan: { enabled: true, mode: 'x' },
+          limits: { x: { minRange: 6 } },   // janela mínima de ~6 meses
+        }
+      },
       scales: {
         x: { stacked: true, title: { display: true, text: 'Mês (calendário)' }, ticks: { maxTicksLimit: 18 }},
         y: { title: { display: true, text: 'R$ por mês' }, ticks: { callback: v => formatBRLshort(v) }}
@@ -494,6 +506,10 @@ function update() {
 document.querySelectorAll('input, select').forEach(el => {
   el.addEventListener('input', update);
   el.addEventListener('change', update);
+});
+
+document.getElementById('btn-reset-zoom').addEventListener('click', () => {
+  if (charts.consolidado && charts.consolidado.resetZoom) charts.consolidado.resetZoom();
 });
 
 update();
