@@ -57,19 +57,24 @@ function buildFluxoConsorcio(inputs) {
   parcelas = aplicarContempAtrasada(parcelas, inputs.contemp);
 
   const custo_ponte = calcCustoPonte(inputs.contemp, inputs.cdi, inputs.ponte_spread);
+  // Custo do ponte distribuído mensalmente do mês 1 até o mês da contemplação,
+  // em vez de lançado integralmente numa única parcela na contemplação.
+  const custo_ponte_mensal = inputs.contemp >= 1 ? custo_ponte / inputs.contemp : 0;
 
   // Fluxo para TIR (ponto de vista do tomador): mês 0 = 0; no mês da contemplação
-  // recebe caixa líquido − ponte − parcela; demais meses = −parcela.
+  // recebe caixa líquido − parcela; o custo do ponte é distribuído mês a mês
+  // (do mês 1 até a contemplação); demais meses = −parcela.
   const fluxo = [0];
   for (let i = 0; i < parcelas.length; i++) {
     const mes = i + 1;
+    const pontePonte = mes <= inputs.contemp ? custo_ponte_mensal : 0;
     if (mes === inputs.contemp) {
-      fluxo.push(PROP.credito_disponivel - PROP.lance_proprio - custo_ponte - parcelas[i]);
+      fluxo.push(PROP.credito_disponivel - PROP.lance_proprio - pontePonte - parcelas[i]);
     } else {
-      fluxo.push(-parcelas[i]);
+      fluxo.push(-parcelas[i] - pontePonte);
     }
   }
-  return { parcelas, fluxo, custo_ponte };
+  return { parcelas, fluxo, custo_ponte, custo_ponte_mensal };
 }
 function calcSaldoDevedorReal(parcelas) {
   const n = parcelas.length;
@@ -165,12 +170,15 @@ function buildConsolidado(inputs, consorcioData, empData, cenario) {
 
   // Saídas de financiamento (estrutura escolhida), ancoradas no mês 1 = início.
   let saidaFin;        // parcelas mensais da estrutura escolhida
-  let pontePorMes;     // custo do ponte (lump-sum) no mês da contemplação (só consórcio)
+  let pontePorMes;     // custo do ponte distribuído mês a mês até a contemplação (só consórcio)
   if (cenario === 'consorcio') {
     saidaFin = [0, ...consorcioData.parcelas];
     pontePorMes = new Array(saidaFin.length).fill(0);
-    if (inputs.contemp >= 1 && inputs.contemp < pontePorMes.length) {
-      pontePorMes[inputs.contemp] += consorcioData.custo_ponte;
+    if (inputs.contemp >= 1) {
+      const custoMensal = consorcioData.custo_ponte_mensal || 0;
+      for (let m = 1; m <= inputs.contemp && m < pontePorMes.length; m++) {
+        pontePorMes[m] += custoMensal;
+      }
     }
   } else {
     saidaFin = [...empData.parcelas]; // já começa com [0, p1, ...]
