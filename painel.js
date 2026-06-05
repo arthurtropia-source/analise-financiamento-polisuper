@@ -103,8 +103,14 @@ function makeChartsFinanciamento(inputs, consorcioData, empData, custoPonte) {
   const parc_c_align = [0, ...parc_c, ...Array(Math.max(0, N - parc_c.length)).fill(0)];
   const parc_e_align = [...parc_e, ...Array(Math.max(0, N + 1 - parc_e.length)).fill(0)];
 
+  // Custo do ponte distribuído mês a mês, do mês 1 até a contemplação.
   const parc_ponte = new Array(N + 1).fill(0);
-  if (inputs.contemp >= 1 && inputs.contemp <= N) parc_ponte[inputs.contemp] = custoPonte;
+  if (inputs.contemp >= 1) {
+    const custoMensal = consorcioData.custo_ponte_mensal != null
+      ? consorcioData.custo_ponte_mensal
+      : custoPonte / inputs.contemp;
+    for (let m = 1; m <= inputs.contemp && m <= N; m++) parc_ponte[m] = custoMensal;
+  }
 
   charts.parcelaCmp = new Chart(document.getElementById('chart-parcela-cmp'), {
     type: 'line',
