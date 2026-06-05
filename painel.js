@@ -196,7 +196,7 @@ function makeChartsFinanciamento(inputs, consorcioData, empData, custoPonte) {
     }
   });
 
-  const saldos = calcSaldoDevedorReal(parc_c);
+  const saldos = calcSaldoDevedorReal(parc_c, inputs.contemp);
   charts.saldo = new Chart(document.getElementById('chart-saldo'), {
     type: 'line',
     data: {

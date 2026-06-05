@@ -38,13 +38,6 @@ function aplicarSeguro(fluxo, ativo) {
   const fator = ativo ? (1 + PROP.seguro_adicional_pct) : 1;
   return fluxo.map(p => p * fator);
 }
-function aplicarContempAtrasada(fluxo, mesContemp) {
-  if (mesContemp <= 1) return [...fluxo];
-  const novo = [];
-  for (let i = 0; i < mesContemp - 1; i++) novo.push(PROP.parcela_inicial_cheia);
-  for (let i = 0; i < fluxo.length; i++) novo.push(fluxo[i]);
-  return novo;
-}
 function calcCustoPonte(mesContemp, cdi, ponteSpread) {
   const taxa_ponte_aa = cdi + ponteSpread;
   const taxa_ponte_am = Math.pow(1 + taxa_ponte_aa, 1 / 12) - 1;
@@ -52,9 +45,13 @@ function calcCustoPonte(mesContemp, cdi, ponteSpread) {
   return valor_final - PROP.lance_proprio;
 }
 function buildFluxoConsorcio(inputs) {
+  // O consórcio tem PRAZO FIXO: o cronograma de parcelas fica ancorado no
+  // calendário e NÃO se desloca quando a contemplação atrasa. Os valores das
+  // parcelas são os mesmos pré e pós-contemplação. A única diferença de atrasar
+  // a contemplação é o custo do empréstimo-ponte (o lance próprio fica preso
+  // mais tempo); não há parcelas adicionais.
   let parcelas = aplicarReajuste(FLUXO_SEM_REAJUSTE, inputs.incc);
   parcelas = aplicarSeguro(parcelas, inputs.seguro);
-  parcelas = aplicarContempAtrasada(parcelas, inputs.contemp);
 
   const custo_ponte = calcCustoPonte(inputs.contemp, inputs.cdi, inputs.ponte_spread);
   // Custo do ponte distribuído mensalmente do mês 1 até o mês da contemplação,
@@ -76,10 +73,22 @@ function buildFluxoConsorcio(inputs) {
   }
   return { parcelas, fluxo, custo_ponte, custo_ponte_mensal };
 }
-function calcSaldoDevedorReal(parcelas) {
+// Saldo devedor ao longo do tempo. Mecânica do consórcio:
+//  - Pré-contemplação: as parcelas são pagas mas NÃO reduzem o saldo devedor;
+//    ficam acumuladas.
+//  - No ato da contemplação: todas as parcelas pagas até ali são abatidas de
+//    uma vez do saldo devedor.
+//  - A partir da contemplação: cada parcela reduz o saldo normalmente.
+// Resultado: o saldo fica "achatado" no valor cheio até a contemplação e, daí
+// em diante, segue a soma das parcelas restantes.
+function calcSaldoDevedorReal(parcelas, contemp = 1) {
   const n = parcelas.length;
-  const saldos = new Array(n + 1).fill(0);
-  for (let t = n - 1; t >= 0; t--) saldos[t] = saldos[t + 1] + parcelas[t];
+  const back = new Array(n + 1).fill(0);          // back[t] = soma de parcelas[t..n-1]
+  for (let t = n - 1; t >= 0; t--) back[t] = back[t + 1] + parcelas[t];
+  const total = back[0];
+  const c = Math.max(1, contemp);
+  const saldos = new Array(n + 1);
+  for (let i = 0; i <= n; i++) saldos[i] = i < c ? total : back[i];
   return saldos;
 }
 
