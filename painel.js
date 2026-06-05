@@ -372,9 +372,19 @@ function update() {
   const vendPagoAteAgora = Math.min(6, TRANCHE_VENDEDOR.total_parcelas); // jan→jun/2026 ≈ 6 pagas
   const vendSaldo = Math.max(0, TRANCHE_VENDEDOR.total_parcelas - vendPagoAteAgora) * TRANCHE_VENDEDOR.parcela;
   setTxt('k-vend-saldo', brlMM(vendSaldo));
-  setTxt('k-pior-acum', cons.pior_acumulado_mes
-    ? brlMM(cons.pior_acumulado) + ' (' + mesLabel(cons.pior_acumulado_mes) + ')'
-    : brlMM(0));
+  // Maior buraco de caixa do cenário escolhido, com a diferença frente ao outro
+  // modelo ao lado do número (verde = buraco menor/melhor, vermelho = maior/pior)
+  // e o mês discreto, em cinza, junto da descrição.
+  const piorEl = document.getElementById('k-pior-acum');
+  const outroCons = inputs.cenario === 'consorcio' ? consBanco : consConsorcio;
+  // valores negativos: diff > 0 significa que ESTE cenário tem buraco menor (melhor)
+  const diffBuraco = cons.pior_acumulado - outroCons.pior_acumulado;
+  const diffHtml = (cons.pior_acumulado_mes && outroCons.pior_acumulado_mes)
+    ? ` <span class="diff ${diffBuraco >= 0 ? 'up' : 'down'}">${diffBuraco >= 0 ? '+' : '−'}${brlMM(Math.abs(diffBuraco))}</span>`
+    : '';
+  piorEl.innerHTML = (cons.pior_acumulado_mes ? brlMM(cons.pior_acumulado) : brlMM(0)) + diffHtml;
+  setTxt('k-pior-acum-sub', 'Acumulado negativo até o break-even' +
+    (cons.pior_acumulado_mes ? ' · ' + mesLabel(cons.pior_acumulado_mes) : ''));
 
   // Veredito consolidado
   const vc = document.getElementById('verdict-consolidado');
