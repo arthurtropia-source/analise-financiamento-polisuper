@@ -55,15 +55,17 @@ function troughMarkersPlugin(troughs) {
     id: 'troughMarkers',
     afterDatasetsDraw(chart) {
       const { ctx, chartArea } = chart;
-      troughs.forEach(t => {
+      const pad = 6, boxH = 20, gap = 4;
+      ctx.save();
+      ctx.font = 'bold 12px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+      troughs.forEach((t, row) => {
         if (t.mesIndex == null) return;
         const meta = chart.getDatasetMeta(t.datasetIndex);
         const pt = meta && meta.data[t.mesIndex];
         if (!pt) return;
         const x = pt.x, y = pt.y;
 
-        ctx.save();
-        // Ponto destacado
+        // Ponto destacado no fundo da curva
         ctx.beginPath();
         ctx.arc(x, y, 5, 0, Math.PI * 2);
         ctx.fillStyle = t.color;
@@ -72,16 +74,21 @@ function troughMarkersPlugin(troughs) {
         ctx.strokeStyle = '#fff';
         ctx.stroke();
 
-        // Caixa de rótulo
-        ctx.font = 'bold 12px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+        // Rótulos empilhados no topo (área positiva livre), com linha-guia até o ponto.
         const text = t.label;
-        const pad = 6, boxH = 20;
         const boxW = ctx.measureText(text).width + pad * 2;
         let bx = x - boxW / 2;
-        // Uma etiqueta acima do ponto, outra abaixo, para não se sobreporem.
-        let by = t.placement === 'above' ? y - boxH - 10 : y + 10;
         bx = Math.max(chartArea.left + 2, Math.min(bx, chartArea.right - boxW - 2));
-        by = Math.max(chartArea.top + 2, Math.min(by, chartArea.bottom - boxH - 2));
+        const by = chartArea.top + 6 + row * (boxH + gap);
+
+        ctx.beginPath();
+        ctx.moveTo(x, by + boxH);
+        ctx.lineTo(x, y - 5);
+        ctx.strokeStyle = t.color;
+        ctx.setLineDash([3, 3]);
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        ctx.setLineDash([]);
 
         ctx.fillStyle = t.color;
         if (ctx.roundRect) { ctx.beginPath(); ctx.roundRect(bx, by, boxW, boxH, 4); ctx.fill(); }
@@ -90,8 +97,8 @@ function troughMarkersPlugin(troughs) {
         ctx.textBaseline = 'middle';
         ctx.textAlign = 'left';
         ctx.fillText(text, bx + pad, by + boxH / 2);
-        ctx.restore();
       });
+      ctx.restore();
     }
   };
 }
@@ -126,8 +133,8 @@ function makeChartsConsolidado(cons, consConsorcio, consBanco) {
   const troughLabel = (c) => c.pior_acumulado_mes
     ? brlMM(c.pior_acumulado) + ' · ' + mesLabel(c.pior_acumulado_mes) : '';
   const troughs = [
-    consConsorcio.pior_acumulado_mes ? { datasetIndex: 0, mesIndex: consConsorcio.pior_acumulado_mes - 1, color: '#2563eb', label: troughLabel(consConsorcio), placement: 'above' } : null,
-    consBanco.pior_acumulado_mes ? { datasetIndex: 1, mesIndex: consBanco.pior_acumulado_mes - 1, color: '#f59e0b', label: troughLabel(consBanco), placement: 'below' } : null,
+    consConsorcio.pior_acumulado_mes ? { datasetIndex: 0, mesIndex: consConsorcio.pior_acumulado_mes - 1, color: '#2563eb', label: troughLabel(consConsorcio) } : null,
+    consBanco.pior_acumulado_mes ? { datasetIndex: 1, mesIndex: consBanco.pior_acumulado_mes - 1, color: '#f59e0b', label: troughLabel(consBanco) } : null,
   ].filter(Boolean);
 
   charts.payback = new Chart(document.getElementById('chart-payback'), {
